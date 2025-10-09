@@ -1,0 +1,245 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Boost Pay Design System - Dark Theme Financial Platform */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    /* Light Theme Colors - Improved contrast and harmony */
+    --background-primary: 210 20% 98%;          /* #F8FAFC - Subtle blue-gray tint */
+    --background-secondary: 210 25% 96%;        /* #F1F5F9 - Slightly darker blue-gray */
+    --background-tertiary: 210 30% 94%;         /* #E2E8F0 - More noticeable contrast */
+    
+    --accent-blue: 195 100% 50%;                /* #00BFFF - Keep brand blue */
+    --accent-blue-hover: 195 100% 45%;          /* Darker for hover */
+    --accent-blue-muted: 195 100% 50% / 0.08;   /* More subtle background */
+    
+    --text-primary: 0 0% 9%;                   /* #171717 - Almost black for maximum contrast */
+    --text-secondary: 0 0% 25%;                 /* #404040 - Dark gray */
+    --text-muted: 0 0% 40%;                     /* #666666 - Medium gray but still readable */
+    
+    --border-color: 215 20% 88%;                /* #CBD5E1 - Subtle border */
+    --border-light: 215 15% 92%;                /* #E2E8F0 - Very light border */
+    
+    /* Status Colors - Same for both themes */
+    --status-success: 142 71% 45%;              /* #22C55E - Slightly adjusted */
+    --status-error: 0 84% 60%;                  /* #EF4444 - Better contrast */
+    --status-warning: 25 95% 53%;               /* #F59E0B - Keep original */
+    --status-info: 213 94% 68%;                 /* #3B82F6 - Better light theme blue */
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--accent-blue)), hsl(var(--accent-blue-hover)));
+    --gradient-card: linear-gradient(145deg, hsl(var(--background-secondary)), hsl(var(--background-tertiary)));
+    --gradient-hero: linear-gradient(135deg, hsl(var(--background-primary)), hsl(var(--background-secondary)));
+    
+    /* Shadows */
+    --shadow-card: 0 4px 6px -1px hsl(215 25% 15% / 0.08);
+    --shadow-card-hover: 0 10px 15px -3px hsl(215 25% 15% / 0.12);
+    --shadow-glow: 0 0 20px hsl(var(--accent-blue) / 0.25);
+    
+    /* Standard shadcn mappings to our system */
+    --background: var(--background-primary);
+    --foreground: var(--text-primary);
+    --card: var(--background-secondary);
+    --card-foreground: var(--text-primary);
+    --popover: var(--background-secondary);
+    --popover-foreground: var(--text-primary);
+    --primary: var(--accent-blue);
+    --primary-foreground: 0 0% 100%;         /* White text on blue */
+    --secondary: var(--background-tertiary);
+    --secondary-foreground: var(--text-primary);
+    --muted: var(--background-tertiary);
+    --muted-foreground: var(--text-secondary);
+    --accent: var(--accent-blue);
+    --accent-foreground: 0 0% 100%;          /* White text on blue */
+    --destructive: var(--status-error);
+    --destructive-foreground: 0 0% 100%;     /* White text on red */
+    --border: var(--border-color);
+    --input: var(--border-color);
+    --ring: var(--accent-blue);
+    --radius: 0.5rem;
+    
+    /* Sidebar specific */
+    --sidebar-background: var(--background-primary);
+    --sidebar-foreground: var(--text-primary);
+    --sidebar-primary: var(--accent-blue);
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: var(--background-tertiary);
+    --sidebar-accent-foreground: var(--text-primary);
+    --sidebar-border: var(--border-color);
+    --sidebar-ring: var(--accent-blue);
+  }
+
+  /* Dark Theme Colors */
+  .dark {
+    /* Boost Pay Dark Theme Palette */
+    --background-primary: 215 40% 5%;        /* #0A0E1A */
+    --background-secondary: 215 35% 9%;      /* #101626 */
+    --background-tertiary: 215 30% 13%;      /* #1A2238 */
+    
+    --accent-blue: 195 100% 50%;             /* #00BFFF */
+    --accent-blue-hover: 195 100% 55%;       /* Slightly lighter for hover */
+    --accent-blue-muted: 195 100% 50% / 0.1; /* 10% opacity for backgrounds */
+    
+    --text-primary: 210 25% 95%;             /* #F0F4F8 */
+    --text-secondary: 215 15% 70%;           /* #A0AEC0 */
+    --text-muted: 215 15% 60%;               /* Darker secondary text */
+    
+    --border-color: 215 25% 22%;             /* #2D3748 */
+    --border-light: 215 25% 18%;             /* Lighter border variant */
+    
+    /* Shadows for dark theme */
+    --shadow-card: 0 4px 6px -1px hsl(215 40% 5% / 0.3);
+    --shadow-card-hover: 0 10px 15px -3px hsl(215 40% 5% / 0.4);
+    
+    /* Standard shadcn mappings to our system */
+    --background: var(--background-primary);
+    --foreground: var(--text-primary);
+    --card: var(--background-secondary);
+    --card-foreground: var(--text-primary);
+    --popover: var(--background-secondary);
+    --popover-foreground: var(--text-primary);
+    --primary: var(--accent-blue);
+    --primary-foreground: var(--text-primary);
+    --secondary: var(--background-tertiary);
+    --secondary-foreground: var(--text-primary);
+    --muted: var(--background-tertiary);
+    --muted-foreground: var(--text-secondary);
+    --accent: var(--accent-blue);
+    --accent-foreground: var(--text-primary);
+    --destructive: var(--status-error);
+    --destructive-foreground: var(--text-primary);
+    --border: var(--border-color);
+    --input: var(--border-color);
+    --ring: var(--accent-blue);
+    
+    /* Sidebar specific for dark theme */
+    --sidebar-background: var(--background-primary);
+    --sidebar-foreground: var(--text-primary);
+    --sidebar-primary: var(--accent-blue);
+    --sidebar-primary-foreground: var(--text-primary);
+    --sidebar-accent: var(--background-tertiary);
+    --sidebar-accent-foreground: var(--text-primary);
+    --sidebar-border: var(--border-color);
+    --sidebar-ring: var(--accent-blue);
+  }
+
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background-secondary));
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border-color));
+    border-radius: 3px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--text-secondary));
+  }
+}
+
+@layer components {
+  /* Custom component classes */
+  .boost-card {
+    @apply bg-card border border-border rounded-lg shadow-sm;
+    background: var(--gradient-card);
+    box-shadow: var(--shadow-card);
+  }
+  
+  .boost-card:hover {
+    box-shadow: var(--shadow-card-hover);
+  }
+  
+  .boost-input {
+    @apply bg-background border border-input rounded-md px-3 py-2 text-sm;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary;
+    @apply placeholder:text-muted-foreground;
+  }
+  
+  .boost-badge-success {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    background: hsl(var(--status-success) / 0.1);
+    color: hsl(var(--status-success));
+    border: 1px solid hsl(var(--status-success) / 0.2);
+  }
+  
+  .boost-badge-error {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    background: hsl(var(--status-error) / 0.1);
+    color: hsl(var(--status-error));
+    border: 1px solid hsl(var(--status-error) / 0.2);
+  }
+  
+  .boost-badge-warning {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    background: hsl(var(--status-warning) / 0.1);
+    color: hsl(var(--status-warning));
+    border: 1px solid hsl(var(--status-warning) / 0.2);
+  }
+  
+  .boost-badge-info {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    background: hsl(var(--status-info) / 0.1);
+    color: hsl(var(--status-info));
+    border: 1px solid hsl(var(--status-info) / 0.2);
+  }
+  
+  .boost-gradient-text {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .boost-glow {
+    box-shadow: var(--shadow-glow);
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  
+  .animate-scale-in {
+    animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
