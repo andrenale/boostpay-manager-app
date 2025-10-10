@@ -210,6 +210,20 @@ export class ProductsService {
       throw error;
     }
   }
+
+  /**
+   * Delete a product
+   * @param productId Product ID to delete
+   * @returns void
+   */
+  async delete(productId: number): Promise<void> {
+    try {
+      await apiService.delete(`${this.basePath}/${productId}`);
+    } catch (error) {
+      console.error(`Error deleting product ${productId}:`, error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance

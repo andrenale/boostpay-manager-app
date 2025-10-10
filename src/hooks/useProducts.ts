@@ -153,16 +153,13 @@ export const useUpdateProduct = (
 
       // Invalidate products lists to refresh them
       queryClient.invalidateQueries({
-        queryKey: PRODUCTS_QUERY_KEYS.lists(),
-        predicate: (query) => {
-          const key = query.queryKey as any[];
-          return key.includes(updatedProduct.establishment_id);
-        },
+        queryKey: PRODUCTS_QUERY_KEYS.list(updatedProduct.establishment_id, { establishment_id: updatedProduct.establishment_id }),
       });
 
       // Invalidate search results that might be affected
       queryClient.invalidateQueries({
-        queryKey: [...PRODUCTS_QUERY_KEYS.all, 'search'],
+        queryKey: [...PRODUCTS_QUERY_KEYS.all, 'search', updatedProduct.establishment_id],
+        exact: false,
       });
     },
     onError: (error) => {
@@ -330,13 +327,22 @@ export const useCreateCurrentEstablishmentProduct = (
       });
     },
     onSuccess: (newProduct, variables) => {
-      // Invalidate and refetch products list for the establishment
+      // Invalidate all product-related queries for this establishment
       queryClient.invalidateQueries({
-        queryKey: PRODUCTS_QUERY_KEYS.lists(),
         predicate: (query) => {
-          const key = query.queryKey as any[];
-          return key.includes(establishmentId);
+          const queryKey = query.queryKey;
+          // Match any query that starts with ['products'] and includes the establishmentId
+          return (
+            Array.isArray(queryKey) &&
+            queryKey[0] === 'products' &&
+            queryKey.includes(establishmentId)
+          );
         },
+      });
+
+      // Force refetch by removing and invalidating the specific query
+      queryClient.removeQueries({
+        queryKey: PRODUCTS_QUERY_KEYS.list(establishmentId, { establishment_id: establishmentId }),
       });
 
       // Add the new product to the cache
@@ -351,6 +357,48 @@ export const useCreateCurrentEstablishmentProduct = (
     onError: (error) => {
       console.error('Error creating product:', handleApiError(error));
       options?.onError?.(error, {} as any, undefined);
+    },
+    ...options,
+  });
+};
+
+// Hook to delete a product from the current establishment
+export const useDeleteCurrentEstablishmentProduct = (
+  options?: Omit<UseMutationOptions<void, Error, number>, 'mutationFn'>
+) => {
+  const queryClient = useQueryClient();
+  const establishmentId = getGlobalEstablishmentId();
+  
+  return useMutation({
+    mutationFn: (productId: number) => {
+      if (!establishmentId) {
+        throw new Error('No establishment selected');
+      }
+      return productsService.delete(productId);
+    },
+    onSuccess: (_, productId, context) => {
+      // Invalidate and refetch products list for the establishment
+      queryClient.invalidateQueries({
+        queryKey: PRODUCTS_QUERY_KEYS.list(establishmentId, { establishment_id: establishmentId }),
+      });
+
+      // Also invalidate search results
+      queryClient.invalidateQueries({
+        queryKey: [...PRODUCTS_QUERY_KEYS.all, 'search', establishmentId],
+        exact: false,
+      });
+
+      // Remove the product from individual query cache
+      queryClient.removeQueries({
+        queryKey: PRODUCTS_QUERY_KEYS.detail(productId),
+      });
+      
+      // Call the custom onSuccess if provided
+      options?.onSuccess?.(undefined, productId, context);
+    },
+    onError: (error, productId) => {
+      console.error(`Error deleting product ${productId}:`, handleApiError(error));
+      options?.onError?.(error, productId, undefined);
     },
     ...options,
   });

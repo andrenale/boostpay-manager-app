@@ -1,80 +1,189 @@
-import { useState, useEffect, useRef } from "react";
-import { Search, Plus, Pencil, Trash2, Image as ImageIcon, X } from "lucide-react";
+import { useState, useRef, useMemo } from "react";
+import { Search, Plus, Pencil, Trash2, Image as ImageIcon, X, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { BoostCard, BoostCardContent } from "@/components/ui/boost-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/currency";
+import { 
+  useAllCurrentEstablishmentProducts, 
+  useCreateCurrentEstablishmentProduct, 
+  useUpdateProduct,
+  useDeleteCurrentEstablishmentProduct,
+  useCurrentEstablishmentProductSearch,
+  PRODUCTS_QUERY_KEYS 
+} from "@/hooks/useProducts";
+import { useEstablishment } from "@/hooks/useEstablishment";
+import { ProductResponse, ProductCreate, ProductUpdate } from "@/types/api";
+import { handleApiError } from "@/services/api";
+import { useQueryClient } from "@tanstack/react-query";
 
-interface Product {
-  id: string;
+// Form state interfaces for better type safety
+
+interface ProductFormState {
+  code: string;
   name: string;
-  description?: string;
-  price: number;
-  imageUrl?: string;
-  createdAt: Date;
+  description: string;
+  price: string;
+  product_photo_url: string;
+}
+
+interface EditingProductState extends Omit<ProductResponse, 'price'> {
+  price: string | number; // Allow string for form input
+}
+
+interface DeleteConfirmation {
+  isOpen: boolean;
+  product: ProductResponse | null;
 }
 
 const Produtos = () => {
+  // Component state
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [newProduct, setNewProduct] = useState({
-    id: "",
+  const [editingProduct, setEditingProduct] = useState<EditingProductState | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmation>({
+    isOpen: false,
+    product: null,
+  });
+  
+  // Form state
+  const [newProduct, setNewProduct] = useState<ProductFormState>({
+    code: "",
     name: "",
     description: "",
     price: "",
-    imageUrl: "",
+    product_photo_url: "",
   });
+  
+  // File input refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Hooks
+  const queryClient = useQueryClient();
+  const { establishmentId, isLoading: establishmentLoading } = useEstablishment();
+  
+  // API hooks for products
+  const { 
+    data: products = [], 
+    isLoading, 
+    error,
+    refetch: refetchProducts 
+  } = useAllCurrentEstablishmentProducts({
+    enabled: !!establishmentId,
+  });
 
-  const [products, setProducts] = useState<Product[]>([]);
+  // Search functionality - use API search for better performance
+  const shouldSearch = searchTerm.length >= 2;
+  const { 
+    data: searchResults,
+    isLoading: searchLoading 
+  } = useCurrentEstablishmentProductSearch(searchTerm, {
+    enabled: shouldSearch,
+  });
 
-  // Carregar produtos do localStorage
-  useEffect(() => {
-    const produtosSalvos = localStorage.getItem('boost-produtos');
-    if (produtosSalvos) {
-      const produtosParseados = JSON.parse(produtosSalvos);
-      // Converter as datas de string para Date
-      const produtosComDatas = produtosParseados.map((p: any) => ({
-        ...p,
-        createdAt: new Date(p.createdAt)
-      }));
-      setProducts(produtosComDatas);
-    } else {
-      // Produtos iniciais mock
-      const produtosIniciais: Product[] = [
-        {
-          id: "prod_FXZtYydpFLYqNa",
-          name: "cerveja",
-          description: "",
-          price: 10.00,
-          createdAt: new Date("2025-09-25T22:21:00"),
-        },
-        {
-          id: "prod_Q26E6ckXuJCoWB",
-          name: "coloca",
-          description: "",
-          price: 20.00,
-          createdAt: new Date("2025-09-25T22:21:00"),
-        },
-      ];
-      setProducts(produtosIniciais);
-      localStorage.setItem('boost-produtos', JSON.stringify(produtosIniciais));
+  // Determine which products to display
+  const displayedProducts = useMemo(() => {
+    if (shouldSearch) {
+      return searchResults || [];
     }
-  }, []);
+    return products;
+  }, [shouldSearch, searchResults, products]);
 
-  // Filtrar produtos
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.id.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Mutations
+  const createProductMutation = useCreateCurrentEstablishmentProduct({
+    onSuccess: (newProduct) => {
+      // Reset form and close modal
+      setIsCreateModalOpen(false);
+      setNewProduct({
+        code: "",
+        name: "",
+        description: "",
+        price: "",
+        product_photo_url: "",
+      });
 
+      // Force a refetch of products to ensure UI is updated
+      refetchProducts();
+
+      toast({
+        title: "Produto criado",
+        description: `O produto "${newProduct.name}" foi criado com sucesso`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao criar produto",
+        description: handleApiError(error),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateProductMutation = useUpdateProduct({
+    onSuccess: (updatedProduct) => {
+      setIsEditModalOpen(false);
+      setEditingProduct(null);
+      
+      // Force a refetch of products to ensure UI is updated
+      refetchProducts();
+      
+      toast({
+        title: "Produto atualizado",
+        description: `O produto "${updatedProduct.name}" foi atualizado com sucesso`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao atualizar produto",
+        description: handleApiError(error),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteProductMutation = useDeleteCurrentEstablishmentProduct({
+    onSuccess: () => {
+      const { product } = deleteConfirmation;
+      
+      // Force a refetch of products to ensure UI is updated
+      refetchProducts();
+      
+      toast({
+        title: "Produto excluído",
+        description: `O produto "${product?.name}" foi excluído com sucesso`,
+      });
+      setDeleteConfirmation({ isOpen: false, product: null });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao excluir produto",
+        description: handleApiError(error),
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Loading and error states
+  const loadingState = establishmentLoading || isLoading || (shouldSearch && searchLoading);
+  const hasError = error && !establishmentLoading;
+
+  // Event handlers
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -91,9 +200,15 @@ const Produtos = () => {
       reader.onloadend = () => {
         const imageUrl = reader.result as string;
         if (isEdit && editingProduct) {
-          setEditingProduct({ ...editingProduct, imageUrl });
+          setEditingProduct({ 
+            ...editingProduct, 
+            product_photo_url: imageUrl 
+          });
         } else {
-          setNewProduct({ ...newProduct, imageUrl });
+          setNewProduct({ 
+            ...newProduct, 
+            product_photo_url: imageUrl 
+          });
         }
       };
       reader.readAsDataURL(file);
@@ -102,77 +217,161 @@ const Produtos = () => {
 
   const handleRemoveImage = (isEdit: boolean = false) => {
     if (isEdit && editingProduct) {
-      setEditingProduct({ ...editingProduct, imageUrl: undefined });
+      setEditingProduct({ 
+        ...editingProduct, 
+        product_photo_url: null 
+      });
     } else {
-      setNewProduct({ ...newProduct, imageUrl: "" });
+      setNewProduct({ 
+        ...newProduct, 
+        product_photo_url: "" 
+      });
     }
   };
 
   const handleCreateProduct = () => {
-    if (!newProduct.name || !newProduct.price) {
+    if (!newProduct.name.trim() || !newProduct.price.trim() || !newProduct.code.trim()) {
       toast({
         title: "Erro",
-        description: "Preencha todos os campos obrigatórios",
+        description: "Preencha todos os campos obrigatórios (código, nome e preço)",
         variant: "destructive",
       });
       return;
     }
 
-    const productToAdd: Product = {
-      id: newProduct.id || `prod_${Math.random().toString(36).substring(2, 15)}`,
-      name: newProduct.name,
-      description: newProduct.description,
-      price: parseFloat(newProduct.price),
-      imageUrl: newProduct.imageUrl || undefined,
-      createdAt: new Date(),
+    const priceValue = parseFloat(newProduct.price);
+    if (isNaN(priceValue) || priceValue <= 0) {
+      toast({
+        title: "Erro",
+        description: "O preço deve ser um número válido maior que zero",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const productData: Omit<ProductCreate, 'establishment_id'> = {
+      code: newProduct.code.trim(),
+      name: newProduct.name.trim(),
+      description: newProduct.description.trim() || undefined,
+      price: priceValue,
+      product_photo_url: newProduct.product_photo_url || undefined,
     };
 
-    const novosProdutos = [productToAdd, ...products];
-    setProducts(novosProdutos);
-    localStorage.setItem('boost-produtos', JSON.stringify(novosProdutos));
-    
-    setIsCreateModalOpen(false);
-    setNewProduct({ id: "", name: "", description: "", price: "", imageUrl: "" });
-    
-    toast({
-      title: "Produto criado",
-      description: "O produto foi criado com sucesso",
-    });
+    createProductMutation.mutate(productData);
   };
 
   const handleEditProduct = () => {
     if (!editingProduct) return;
 
-    const produtosAtualizados = products.map(p => 
-      p.id === editingProduct.id ? editingProduct : p
-    );
-    setProducts(produtosAtualizados);
-    localStorage.setItem('boost-produtos', JSON.stringify(produtosAtualizados));
-    
-    setIsEditModalOpen(false);
-    setEditingProduct(null);
-    
-    toast({
-      title: "Produto atualizado",
-      description: "O produto foi atualizado com sucesso",
+    if (!editingProduct.name.trim()) {
+      toast({
+        title: "Erro",
+        description: "O nome do produto é obrigatório",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const priceValue = typeof editingProduct.price === 'string' 
+      ? parseFloat(editingProduct.price) 
+      : editingProduct.price;
+
+    if (isNaN(priceValue) || priceValue <= 0) {
+      toast({
+        title: "Erro",
+        description: "O preço deve ser um número válido maior que zero",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const updateData: ProductUpdate = {
+      code: editingProduct.code,
+      name: editingProduct.name.trim(),
+      description: editingProduct.description?.trim() || undefined,
+      price: priceValue,
+      product_photo_url: editingProduct.product_photo_url || undefined,
+    };
+
+    updateProductMutation.mutate({
+      id: editingProduct.id,
+      data: updateData,
     });
   };
 
-  const handleDeleteProduct = (id: string) => {
-    const produtosFiltrados = products.filter(p => p.id !== id);
-    setProducts(produtosFiltrados);
-    localStorage.setItem('boost-produtos', JSON.stringify(produtosFiltrados));
-    
-    toast({
-      title: "Produto excluído",
-      description: "O produto foi excluído com sucesso",
+  const handleDeleteProduct = (product: ProductResponse) => {
+    setDeleteConfirmation({
+      isOpen: true,
+      product,
     });
   };
 
-  const openEditModal = (product: Product) => {
-    setEditingProduct({ ...product });
+  const confirmDelete = () => {
+    const { product } = deleteConfirmation;
+    if (!product) return;
+
+    deleteProductMutation.mutate(product.id);
+  };
+
+  const openEditModal = (product: ProductResponse) => {
+    setEditingProduct({ 
+      ...product,
+      price: product.price.toString() // Convert price to string for form input
+    });
     setIsEditModalOpen(true);
   };
+
+  const resetCreateForm = () => {
+    setNewProduct({
+      code: "",
+      name: "",
+      description: "",
+      price: "",
+      product_photo_url: "",
+    });
+    setIsCreateModalOpen(false);
+  };
+
+  const resetEditForm = () => {
+    setEditingProduct(null);
+    setIsEditModalOpen(false);
+  };
+
+  // Filter products based on search
+  const filteredProducts = (products || []).filter(product =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (product.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.code.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Handle loading and error states
+  if (loadingState) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold text-boost-text-primary">Produtos</h1>
+        <div className="flex items-center justify-center py-10">
+          <div className="text-boost-text-secondary">Carregando produtos...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold text-boost-text-primary">Produtos</h1>
+        <div className="flex flex-col items-center justify-center py-10 space-y-4">
+          <div className="text-red-500">Erro ao carregar produtos: {handleApiError(error)}</div>
+          <Button 
+            onClick={() => queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEYS.lists() })}
+            variant="outline"
+          >
+            Tentar novamente
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -241,7 +440,7 @@ const Produtos = () => {
                       {formatCurrency(product.price)} <span className="text-boost-text-secondary text-xs">BRL</span>
                     </td>
                     <td className="py-4 px-6 text-boost-text-secondary">
-                      {product.createdAt.toLocaleDateString('pt-BR', {
+                      {new Date(product.created_at).toLocaleDateString('pt-BR', {
                         year: 'numeric',
                         month: 'short',
                         day: '2-digit',
@@ -262,7 +461,7 @@ const Produtos = () => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleDeleteProduct(product.id)}
+                          onClick={() => handleDeleteProduct(product)}
                           className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-500/10"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -298,14 +497,14 @@ const Produtos = () => {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="productId" className="text-boost-text-primary">
-                Id do Produto
+              <Label htmlFor="productCode" className="text-boost-text-primary">
+                Código do Produto
               </Label>
               <Input
-                id="productId"
-                placeholder="Id do produto..."
-                value={newProduct.id}
-                onChange={(e) => setNewProduct({ ...newProduct, id: e.target.value })}
+                id="productCode"
+                placeholder="Código do produto..."
+                value={newProduct.code}
+                onChange={(e) => setNewProduct({ ...newProduct, code: e.target.value })}
                 className="bg-boost-bg-secondary border-boost-border text-boost-text-primary"
               />
             </div>
@@ -358,10 +557,10 @@ const Produtos = () => {
                 onChange={(e) => handleImageUpload(e, false)}
                 className="hidden"
               />
-              {newProduct.imageUrl ? (
+              {newProduct.product_photo_url ? (
                 <div className="relative">
                   <img
-                    src={newProduct.imageUrl}
+                    src={newProduct.product_photo_url}
                     alt="Preview"
                     className="w-full h-32 object-cover rounded-lg border border-boost-border"
                   />
@@ -464,7 +663,7 @@ const Produtos = () => {
                   step="0.01"
                   placeholder="R$ 0,00"
                   value={editingProduct.price}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) })}
+                  onChange={(e) => setEditingProduct({ ...editingProduct, price: e.target.value })}
                   className="bg-boost-bg-secondary border-boost-border text-boost-text-primary"
                 />
               </div>
@@ -479,10 +678,10 @@ const Produtos = () => {
                   onChange={(e) => handleImageUpload(e, true)}
                   className="hidden"
                 />
-                {editingProduct.imageUrl ? (
+                {editingProduct.product_photo_url ? (
                   <div className="relative">
                     <img
-                      src={editingProduct.imageUrl}
+                      src={editingProduct.product_photo_url}
                       alt="Preview"
                       className="w-full h-32 object-cover rounded-lg border border-boost-border"
                     />
@@ -528,6 +727,43 @@ const Produtos = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog 
+        open={deleteConfirmation.isOpen} 
+        onOpenChange={(open) => !open && setDeleteConfirmation({ isOpen: false, product: null })}
+      >
+        <AlertDialogContent className="bg-boost-bg-secondary border-boost-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-boost-text-primary">
+              Excluir Produto
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-boost-text-secondary">
+              Tem certeza que deseja excluir o produto "{deleteConfirmation.product?.name}"? 
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-boost-bg-primary border-boost-border text-boost-text-primary hover:bg-boost-bg-hover">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleteProductMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deleteProductMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                'Excluir'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
