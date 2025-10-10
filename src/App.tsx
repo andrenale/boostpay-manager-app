@@ -1,10 +1,12 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
+import { AppProviders } from "./providers/AppProviders";
 import { AppLayout } from "./components/layout/AppLayout";
+import { ApiTestsNavigation } from "./test-pages/ApiTestsNavigation";
+import { ProductsApiTest } from "./test-pages/ProductsApiTest";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Transactions from "./pages/Transactions";
@@ -22,10 +24,9 @@ import Cobranca from "./pages/Cobranca";
 import CobrancaSucesso from "./pages/CobrancaSucesso";
 import Checkout from "./pages/Checkout";
 import Produtos from "./pages/Produtos";
-const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
+  <AppProviders>
     <ThemeProvider
       attribute="class"
       defaultTheme="dark"
@@ -35,9 +36,13 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/login" element={<Login />} />
+          
+          {/* Hidden API Testing Routes - For Development Only */}
+          <Route path="/dev/api-tests" element={<ApiTestsNavigation />} />
+          <Route path="/dev/api-tests/products" element={<ProductsApiTest />} />
+          
           <Route path="/" element={
             <AppLayout>
               <Dashboard />
@@ -108,10 +113,9 @@ const App = () => (
           <Route path="/checkout" element={<Checkout />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
-        </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>
-  </QueryClientProvider>
+  </AppProviders>
 );
 
 export default App;
