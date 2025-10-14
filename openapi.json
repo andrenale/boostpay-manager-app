@@ -1055,7 +1055,7 @@
       "get": {
         "tags": ["establishments"],
         "summary": "List Establishments",
-        "description": "List all establishments",
+        "description": "List establishments accessible to the user",
         "operationId": "list_establishments_establishments__get",
         "security": [{ "HTTPBearer": [] }],
         "parameters": [
@@ -1102,7 +1102,7 @@
       "get": {
         "tags": ["establishments"],
         "summary": "Get Establishment",
-        "description": "Get establishment by ID",
+        "description": "Get establishment by ID - superuser gets any establishment, regular users need access",
         "operationId": "get_establishment_establishments__establishment_id__get",
         "security": [{ "HTTPBearer": [] }],
         "parameters": [
@@ -1137,7 +1137,7 @@
       "put": {
         "tags": ["establishments"],
         "summary": "Update Establishment",
-        "description": "Update establishment information",
+        "description": "Update establishment information - requires access permission",
         "operationId": "update_establishment_establishments__establishment_id__put",
         "security": [{ "HTTPBearer": [] }],
         "parameters": [
@@ -1176,12 +1176,89 @@
             }
           }
         }
+      }
+    },
+    "/establishments/{establishment_id}/users/{user_id}": {
+      "post": {
+        "tags": ["establishments"],
+        "summary": "Add User To Establishment",
+        "description": "Add user to establishment (superuser only)",
+        "operationId": "add_user_to_establishment_establishments__establishment_id__users__user_id__post",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "establishment_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "title": "Establishment Id" }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "title": "User Id" }
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "default": "user", "title": "Role" }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
       },
       "delete": {
         "tags": ["establishments"],
-        "summary": "Delete Establishment",
-        "description": "Delete establishment by ID (superuser only)",
-        "operationId": "delete_establishment_establishments__establishment_id__delete",
+        "summary": "Remove User From Establishment",
+        "description": "Remove user from establishment (superuser only)",
+        "operationId": "remove_user_from_establishment_establishments__establishment_id__users__user_id__delete",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "establishment_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "title": "Establishment Id" }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "title": "User Id" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Successful Response" },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/establishments/{establishment_id}/users": {
+      "get": {
+        "tags": ["establishments"],
+        "summary": "Get Establishment Users",
+        "description": "Get users associated with establishment",
+        "operationId": "get_establishment_users_establishments__establishment_id__users_get",
         "security": [{ "HTTPBearer": [] }],
         "parameters": [
           {
@@ -1192,7 +1269,18 @@
           }
         ],
         "responses": {
-          "204": { "description": "Successful Response" },
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "type": "object", "additionalProperties": true },
+                  "title": "Response Get Establishment Users Establishments  Establishment Id  Users Get"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1502,6 +1590,12 @@
             "minLength": 1,
             "title": "Identification Document Number"
           },
+          "type": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/EstablishmentType" },
+              { "type": "null" }
+            ]
+          },
           "legal_representative_document_number": {
             "anyOf": [
               { "type": "string", "maxLength": 32, "minLength": 1 },
@@ -1660,6 +1754,12 @@
             "maxLength": 32,
             "minLength": 1,
             "title": "Identification Document Number"
+          },
+          "type": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/EstablishmentType" },
+              { "type": "null" }
+            ]
           },
           "legal_representative_document_number": {
             "anyOf": [
@@ -1827,6 +1927,11 @@
         "required": ["identification_document_number", "id"],
         "title": "EstablishmentResponse"
       },
+      "EstablishmentType": {
+        "type": "string",
+        "enum": ["PERSONAL", "BUSINESS"],
+        "title": "EstablishmentType"
+      },
       "EstablishmentUpdate": {
         "properties": {
           "identification_document_number": {
@@ -1835,6 +1940,12 @@
               { "type": "null" }
             ],
             "title": "Identification Document Number"
+          },
+          "type": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/EstablishmentType" },
+              { "type": "null" }
+            ]
           },
           "legal_representative_document_number": {
             "anyOf": [

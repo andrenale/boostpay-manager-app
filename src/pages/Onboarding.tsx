@@ -19,43 +19,71 @@ import {
   Calendar
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { 
+  useCurrentEstablishment, 
+  useUpdateCurrentEstablishment,
+  useCreateEstablishment 
+} from "@/hooks/useEstablishments";
+import { EstablishmentUpdate, EstablishmentCreate } from "@/types/api";
+import { handleApiError } from "@/services/api";
 
 type AccountType = "juridica" | "fisica";
 
 interface OnboardingData {
-  accountType: AccountType;
-  // Dados da conta
-  cnpj?: string;
-  cpfRepresentante?: string;
-  dataNascimentoRepresentante?: string;
-  celularRepresentante?: string;
-  cpf?: string;
-  dataNascimento?: string;
-  celular?: string;
-  // Dados do negócio
-  nomeEmpresa: string;
-  nomeFantasia?: string;
-  segmento: string;
+  accountType?: AccountType;
+  
+  // API fields (matching EstablishmentUpdate)
+  identification_document_number?: string; // CNPJ or CPF
+  legal_representative_document_number?: string; // CPF do representante
+  legal_representative_birth_date?: string; // Data de nascimento do representante
+  legal_representative_phone?: string; // Celular do representante
+  company_name?: string; // Nome da empresa
+  trade_name?: string; // Nome fantasia
+  business_segment?: string; // Segmento
   website?: string;
-  descricaoAtividade: string;
-  // Endereço
-  cep: string;
-  estado: string;
-  logradouro: string;
-  numero: string;
-  complemento?: string;
-  bairro: string;
-  cidade: string;
-  // Dados de acesso
-  email: string;
-  senha: string;
-  confirmarSenha: string;
-  aceitaTermos: boolean;
-  // Documentos
+  activity_description?: string; // Descrição da atividade
+  postal_code?: string; // CEP
+  state?: string; // Estado
+  city?: string; // Cidade
+  street?: string; // Logradouro
+  number?: string; // Número
+  complement?: string; // Complemento
+  neighborhood?: string; // Bairro
+  identification_document_file_url?: string;
+  address_proof_file_url?: string;
+  articles_of_incorporation_file_url?: string;
+  
+  // Form-specific fields (not API fields)
+  email?: string;
+  senha?: string;
+  confirmarSenha?: string;
+  aceitaTermos?: boolean;
+  
+  // Document files (local state before upload)
   contratoSocial?: File;
   rgRepresentante?: File;
   cpfDocumento?: File;
   comprovanteEndereco?: File;
+
+  // Legacy field mappings for backwards compatibility
+  cnpj?: string; // Maps to identification_document_number
+  cpfRepresentante?: string; // Maps to legal_representative_document_number
+  dataNascimentoRepresentante?: string; // Maps to legal_representative_birth_date
+  celularRepresentante?: string; // Maps to legal_representative_phone
+  cpf?: string; // Maps to identification_document_number (for pessoa física)
+  dataNascimento?: string; // For pessoa física birth date
+  celular?: string; // For pessoa física phone
+  nomeEmpresa?: string; // Maps to company_name
+  nomeFantasia?: string; // Maps to trade_name
+  segmento?: string; // Maps to business_segment
+  descricaoAtividade?: string; // Maps to activity_description
+  cep?: string; // Maps to postal_code
+  estado?: string; // Maps to state
+  logradouro?: string; // Maps to street
+  numero?: string; // Maps to number
+  bairro?: string; // Maps to neighborhood
+  cidade?: string; // Maps to city
+  complemento?: string; // Maps to complement
 }
 
 const steps = [
@@ -91,61 +119,172 @@ export function Onboarding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // Simular loading inicial para evitar tela branca
+  // API hooks for establishment data
+  const {
+    data: currentEstablishment,
+    isLoading: establishmentLoading,
+    error: establishmentError,
+  } = useCurrentEstablishment();
+
+  const updateEstablishmentMutation = useUpdateCurrentEstablishment({
+    onSuccess: () => {
+      toast({
+        title: "✅ Dados atualizados com sucesso!",
+        description: "As informações do estabelecimento foram salvas.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao salvar dados",
+        description: handleApiError(error),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createEstablishmentMutation = useCreateEstablishment({
+    onSuccess: () => {
+      toast({
+        title: "✅ Estabelecimento criado com sucesso!",
+        description: "Seu estabelecimento foi criado e os dados foram salvos.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao criar estabelecimento",
+        description: handleApiError(error),
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Load existing establishment data and handle initial setup
   useEffect(() => {
     const timer = setTimeout(() => {
+      // If we have establishment data, populate the form
+      if (currentEstablishment && !establishmentLoading) {
+        setData(prev => ({
+          ...prev,
+          // Map API fields to form fields
+          identification_document_number: currentEstablishment.identification_document_number,
+          legal_representative_document_number: currentEstablishment.legal_representative_document_number || undefined,
+          legal_representative_birth_date: currentEstablishment.legal_representative_birth_date || undefined,
+          legal_representative_phone: currentEstablishment.legal_representative_phone || undefined,
+          company_name: currentEstablishment.company_name || undefined,
+          trade_name: currentEstablishment.trade_name || undefined,
+          business_segment: currentEstablishment.business_segment || undefined,
+          website: currentEstablishment.website || undefined,
+          activity_description: currentEstablishment.activity_description || undefined,
+          postal_code: currentEstablishment.postal_code || undefined,
+          state: currentEstablishment.state || undefined,
+          city: currentEstablishment.city || undefined,
+          street: currentEstablishment.street || undefined,
+          number: currentEstablishment.number || undefined,
+          complement: currentEstablishment.complement || undefined,
+          neighborhood: currentEstablishment.neighborhood || undefined,
+          identification_document_file_url: currentEstablishment.identification_document_file_url || undefined,
+          address_proof_file_url: currentEstablishment.address_proof_file_url || undefined,
+          articles_of_incorporation_file_url: currentEstablishment.articles_of_incorporation_file_url || undefined,
+          
+          // Legacy field mappings for existing UI
+          cnpj: currentEstablishment.identification_document_number,
+          cpfRepresentante: currentEstablishment.legal_representative_document_number || undefined,
+          dataNascimentoRepresentante: currentEstablishment.legal_representative_birth_date || undefined,
+          celularRepresentante: currentEstablishment.legal_representative_phone || undefined,
+          nomeEmpresa: currentEstablishment.company_name || "",
+          nomeFantasia: currentEstablishment.trade_name || undefined,
+          segmento: currentEstablishment.business_segment || "",
+          descricaoAtividade: currentEstablishment.activity_description || "",
+          cep: currentEstablishment.postal_code || "",
+          estado: currentEstablishment.state || "",
+          logradouro: currentEstablishment.street || "",
+          numero: currentEstablishment.number || "",
+          bairro: currentEstablishment.neighborhood || "",
+          cidade: currentEstablishment.city || "",
+          complemento: currentEstablishment.complement || undefined,
+        }));
+
+        // Determine account type based on document length (CNPJ vs CPF)
+        if (currentEstablishment.identification_document_number) {
+          const docLength = currentEstablishment.identification_document_number.replace(/\D/g, '').length;
+          const accountType = docLength === 14 ? "juridica" : "fisica";
+          setData(prev => ({ ...prev, accountType }));
+        }
+      }
+
       setIsLoading(false);
       
-      // Verificar se há um parâmetro de etapa na URL
+      // Handle URL step parameter
       const stepParam = searchParams.get('step');
       if (stepParam) {
         const stepNumber = parseInt(stepParam, 10);
         if (stepNumber >= 1 && stepNumber <= 5) {
           setCurrentStep(stepNumber);
-          
-          // Marcar que o onboarding foi iniciado
-          localStorage.setItem('onboardingStarted', 'true');
-          
-          // Se chegou diretamente na etapa 4 (documentos), simular dados da conta
-          if (stepNumber === 4) {
-            // Verificar se já existem dados pessoais salvos
-            const savedPersonalInfo = localStorage.getItem('personalInfo');
-            if (savedPersonalInfo) {
-              // Usuário com dados existentes - carregar dados salvos
-              const personalData = JSON.parse(savedPersonalInfo);
-              setData(prev => ({ ...prev, ...personalData }));
-            } else {
-              // Usuário novo direto para documentos - simular dados básicos
-              setData(prev => ({
-                ...prev,
-                accountType: "juridica",
-                nomeEmpresa: "Empresa Exemplo Ltda",
-                segmento: "tecnologia",
-                descricaoAtividade: "Desenvolvimento de software",
-                cep: "01234-567",
-                estado: "SP",
-                logradouro: "Rua Exemplo",
-                numero: "123",
-                bairro: "Centro",
-                cidade: "São Paulo",
-                email: "usuario@exemplo.com"
-              }));
-            }
-          }
         }
       }
     }, 100);
     return () => clearTimeout(timer);
-  }, [searchParams]);
+  }, [currentEstablishment, establishmentLoading, searchParams]);
 
   const updateData = (field: string, value: any) => {
     setData(prev => ({ ...prev, [field]: value }));
   };
 
-  const nextStep = () => {
-    // Salvar dados pessoais ao avançar das etapas iniciais
-    if (currentStep <= 3) {
-      localStorage.setItem('personalInfo', JSON.stringify(data));
+  // Function to convert form data to API format
+  const convertToApiFormat = (formData: OnboardingData): EstablishmentUpdate => {
+    return {
+      identification_document_number: formData.cnpj || formData.cpf || formData.identification_document_number,
+      legal_representative_document_number: formData.cpfRepresentante || formData.legal_representative_document_number,
+      legal_representative_birth_date: formData.dataNascimentoRepresentante || formData.legal_representative_birth_date,
+      legal_representative_phone: formData.celularRepresentante || formData.celular || formData.legal_representative_phone,
+      company_name: formData.nomeEmpresa || formData.company_name,
+      trade_name: formData.nomeFantasia || formData.trade_name,
+      business_segment: formData.segmento || formData.business_segment,
+      website: formData.website,
+      activity_description: formData.descricaoAtividade || formData.activity_description,
+      postal_code: formData.cep || formData.postal_code,
+      state: formData.estado || formData.state,
+      city: formData.cidade || formData.city,
+      street: formData.logradouro || formData.street,
+      number: formData.numero || formData.number,
+      complement: formData.complemento || formData.complement,
+      neighborhood: formData.bairro || formData.neighborhood,
+      identification_document_file_url: formData.identification_document_file_url,
+      address_proof_file_url: formData.address_proof_file_url,
+      articles_of_incorporation_file_url: formData.articles_of_incorporation_file_url,
+    };
+  };
+
+  const saveDataToAPI = async () => {
+    try {
+      const apiData = convertToApiFormat(data);
+      
+      if (currentEstablishment) {
+        // Update existing establishment
+        await updateEstablishmentMutation.mutateAsync(apiData);
+      } else {
+        // Create new establishment
+        const createData: EstablishmentCreate = {
+          identification_document_number: apiData.identification_document_number || '',
+          ...apiData
+        };
+        await createEstablishmentMutation.mutateAsync(createData);
+      }
+    } catch (error) {
+      console.error('Error saving establishment data:', error);
+      throw error;
+    }
+  };
+
+  const nextStep = async () => {
+    // Save data to API when advancing through steps with meaningful data
+    if (currentStep <= 3 && (data.cnpj || data.cpf || data.nomeEmpresa)) {
+      try {
+        await saveDataToAPI();
+      } catch (error) {
+        // Don't block navigation on save errors, but show toast
+        console.error('Failed to save data:', error);
+      }
     }
     
     if (currentStep < 5) {
@@ -170,35 +309,45 @@ export function Onboarding() {
     }
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     setIsSubmitting(true);
     
-    // Verificar se todos os documentos necessários foram enviados
-    const allDocumentsUploaded = checkAllDocumentsUploaded();
-    
-    setTimeout(() => {
+    try {
+      // Save final data to API
+      await saveDataToAPI();
+      
+      // Check if all documents are uploaded
+      const allDocumentsUploaded = checkAllDocumentsUploaded();
+      
       if (allDocumentsUploaded) {
-        // Todos os documentos foram enviados
-        localStorage.setItem('allDocumentsCompleted', 'true');
         toast({
           title: "✅ Cadastro Finalizado com Sucesso!",
           description: "Seus dados e documentos foram enviados para análise. Nossa equipe revisará todas as informações e você receberá uma resposta por email em até 3 dias úteis. Agradecemos pela confiança!",
           duration: 6000,
         });
       } else {
-        // Faltam documentos, mas ainda permite finalizar
         toast({
-          title: "✅ Cadastro Criado com Sucesso!",
-          description: "Sua conta foi criada! Ainda há documentos pendentes que precisam ser enviados. Você encontrará um lembrete na tela inicial para completar o envio. Após enviar todos os documentos, a análise será concluída em até 3 dias úteis.",
+          title: "✅ Cadastro Atualizado com Sucesso!",
+          description: "Suas informações foram salvas! Ainda há documentos pendentes que precisam ser enviados. Você encontrará um lembrete na tela inicial para completar o envio.",
           duration: 8000,
         });
       }
       
-      // Sempre navegar para o dashboard após finalizar
+      // Navigate back to dashboard after successful save
       setTimeout(() => {
         navigate("/");
       }, 2000);
-    }, 1500); // Simular processamento
+      
+    } catch (error) {
+      toast({
+        title: "Erro ao salvar dados",
+        description: "Houve um problema ao salvar suas informações. Tente novamente.",
+        variant: "destructive",
+      });
+      console.error('Error completing onboarding:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Função para verificar se todos os documentos obrigatórios foram enviados

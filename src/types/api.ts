@@ -124,20 +124,20 @@ export interface TransactionResponse extends BaseEntity {
 
 // Establishment Types
 export interface EstablishmentCreate {
-  identification_document_number: string; // max 32 chars, min 1
-  legal_representative_document_number: string; // max 32 chars, min 1
-  legal_representative_birth_date: string; // date format
-  legal_representative_phone: string; // max 20 chars, min 8
-  company_name: string; // max 255 chars, min 1
+  identification_document_number: string; // max 32 chars, min 1 - Required field
+  legal_representative_document_number?: string | null; // max 32 chars, min 1
+  legal_representative_birth_date?: string | null; // date format
+  legal_representative_phone?: string | null; // max 20 chars, min 8
+  company_name?: string | null; // max 255 chars, min 1
   trade_name?: string | null; // max 255 chars
   business_segment?: string | null; // max 128 chars
   website?: string | null; // URI format, max 2083 chars
   activity_description?: string | null; // max 512 chars
-  postal_code: string; // max 16 chars, min 5
-  state: string; // max 64 chars, min 2
-  city: string; // max 128 chars, min 1
-  street: string; // max 128 chars, min 1
-  number: string; // max 16 chars, min 1
+  postal_code?: string | null; // max 16 chars, min 5
+  state?: string | null; // max 64 chars, min 2
+  city?: string | null; // max 128 chars, min 1
+  street?: string | null; // max 128 chars, min 1
+  number?: string | null; // max 16 chars, min 1
   complement?: string | null; // max 128 chars
   neighborhood?: string | null; // max 128 chars
   identification_document_file_url?: string | null; // URI format, max 2083 chars
@@ -147,24 +147,46 @@ export interface EstablishmentCreate {
 
 export interface EstablishmentResponse extends BaseEntity {
   identification_document_number: string;
-  legal_representative_document_number: string;
-  legal_representative_birth_date: string; // date format
-  legal_representative_phone: string;
-  company_name: string;
-  trade_name: string | null;
-  business_segment: string | null;
-  website: string | null;
-  activity_description: string | null;
-  postal_code: string;
-  state: string;
-  city: string;
-  street: string;
-  number: string;
-  complement: string | null;
-  neighborhood: string | null;
-  identification_document_file_url: string | null;
-  address_proof_file_url: string | null;
-  articles_of_incorporation_file_url: string | null;
+  legal_representative_document_number?: string | null;
+  legal_representative_birth_date?: string | null; // date format
+  legal_representative_phone?: string | null;
+  company_name?: string | null;
+  trade_name?: string | null;
+  business_segment?: string | null;
+  website?: string | null;
+  activity_description?: string | null;
+  postal_code?: string | null;
+  state?: string | null;
+  city?: string | null;
+  street?: string | null;
+  number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  identification_document_file_url?: string | null;
+  address_proof_file_url?: string | null;
+  articles_of_incorporation_file_url?: string | null;
+}
+
+export interface EstablishmentUpdate {
+  identification_document_number?: string | null;
+  legal_representative_document_number?: string | null;
+  legal_representative_birth_date?: string | null;
+  legal_representative_phone?: string | null;
+  company_name?: string | null;
+  trade_name?: string | null;
+  business_segment?: string | null;
+  website?: string | null;
+  activity_description?: string | null;
+  postal_code?: string | null;
+  state?: string | null;
+  city?: string | null;
+  street?: string | null;
+  number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  identification_document_file_url?: string | null;
+  address_proof_file_url?: string | null;
+  articles_of_incorporation_file_url?: string | null;
 }
 
 // Document Types

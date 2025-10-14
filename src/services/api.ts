@@ -1,7 +1,8 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 
 // TODO: Replace this hardcoded token with your actual token
-const HARDCODED_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXZfdXNlcl85NCIsImVzdGFibGlzaG1lbnRzIjpbeyJpZCI6OTQsInJvbGUiOiJhZG1pbiJ9XSwiZXhwIjoxNzY1MjQxNjYxLCJpYXQiOjE3NjAwNTc2NjEsInR5cGUiOiJhY2Nlc3NfdG9rZW4ifQ.WM3Dt0pwJhmrKt_D5-DMLVEQglt2jozF7X_5_4GUpn8';
+// const HARDCODED_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXZfdXNlcl85NCIsImVzdGFibGlzaG1lbnRzIjpbeyJpZCI6OTQsInJvbGUiOiJhZG1pbiJ9XSwiZXhwIjoxNzY1MjQxNjYxLCJpYXQiOjE3NjAwNTc2NjEsInR5cGUiOiJhY2Nlc3NfdG9rZW4ifQ.WM3Dt0pwJhmrKt_D5-DMLVEQglt2jozF7X_5_4GUpn8';
+const HARDCODED_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbmRyZS5uYWxldmFpa29AZ21haWwuY29tIiwiZXN0YWJsaXNobWVudHMiOlt7ImlkIjo5NCwicm9sZSI6ImFkbWluIn1dLCJleHAiOjE3NjU1OTIwOTZ9.ktYksbvYGw9jr3aVMwIY9uGuxhlWf6VikN8aSlcVDHM';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
