@@ -122,9 +122,16 @@ export interface TransactionResponse extends BaseEntity {
   transaction_metadata: Record<string, string> | null;
 }
 
+// Establishment Type Enum
+export enum EstablishmentType {
+  BUSINESS = "BUSINESS",
+  PERSONAL = "PERSONAL"
+}
+
 // Establishment Types
 export interface EstablishmentCreate {
   identification_document_number: string; // max 32 chars, min 1 - Required field
+  type?: EstablishmentType | null; // Establishment type enum
   legal_representative_document_number?: string | null; // max 32 chars, min 1
   legal_representative_birth_date?: string | null; // date format
   legal_representative_phone?: string | null; // max 20 chars, min 8
@@ -147,6 +154,7 @@ export interface EstablishmentCreate {
 
 export interface EstablishmentResponse extends BaseEntity {
   identification_document_number: string;
+  type?: EstablishmentType | null; // Establishment type enum
   legal_representative_document_number?: string | null;
   legal_representative_birth_date?: string | null; // date format
   legal_representative_phone?: string | null;
@@ -169,6 +177,7 @@ export interface EstablishmentResponse extends BaseEntity {
 
 export interface EstablishmentUpdate {
   identification_document_number?: string | null;
+  type?: EstablishmentType | null; // Establishment type enum
   legal_representative_document_number?: string | null;
   legal_representative_birth_date?: string | null;
   legal_representative_phone?: string | null;

@@ -24,7 +24,7 @@ import {
   useUpdateCurrentEstablishment,
   useCreateEstablishment 
 } from "@/hooks/useEstablishments";
-import { EstablishmentUpdate, EstablishmentCreate } from "@/types/api";
+import { EstablishmentUpdate, EstablishmentCreate, EstablishmentType } from "@/types/api";
 import { handleApiError } from "@/services/api";
 
 type AccountType = "juridica" | "fisica";
@@ -65,13 +65,16 @@ interface OnboardingData {
   cpfDocumento?: File;
   comprovanteEndereco?: File;
 
+  // Shared fields for both account types
+  telefone?: string; // Shared phone field for both juridica and fisica
+  dataNascimento?: string; // Shared birth date field for both types
+  
   // Legacy field mappings for backwards compatibility
   cnpj?: string; // Maps to identification_document_number
   cpfRepresentante?: string; // Maps to legal_representative_document_number
   dataNascimentoRepresentante?: string; // Maps to legal_representative_birth_date
   celularRepresentante?: string; // Maps to legal_representative_phone
   cpf?: string; // Maps to identification_document_number (for pessoa física)
-  dataNascimento?: string; // For pessoa física birth date
   celular?: string; // For pessoa física phone
   nomeEmpresa?: string; // Maps to company_name
   nomeFantasia?: string; // Maps to trade_name
@@ -98,6 +101,7 @@ export function Onboarding() {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [accountTypeSetByUser, setAccountTypeSetByUser] = useState(false);
   const [data, setData] = useState<OnboardingData>({
     accountType: undefined as any,
     nomeEmpresa: "",
@@ -113,6 +117,10 @@ export function Onboarding() {
     senha: "",
     confirmarSenha: "",
     aceitaTermos: false,
+    // Shared fields for both account types
+    identification_document_number: "", // Shared document field (CPF/CNPJ)
+    telefone: "", // Shared phone field
+    dataNascimento: "", // Shared birth date field
   });
   
   const { toast } = useToast();
@@ -124,6 +132,7 @@ export function Onboarding() {
     data: currentEstablishment,
     isLoading: establishmentLoading,
     error: establishmentError,
+    refetch: refetchEstablishment,
   } = useCurrentEstablishment();
 
   const updateEstablishmentMutation = useUpdateCurrentEstablishment({
@@ -163,8 +172,22 @@ export function Onboarding() {
     const timer = setTimeout(() => {
       // If we have establishment data, populate the form
       if (currentEstablishment && !establishmentLoading) {
+        // Determine account type based on establishment type or document length
+        let detectedAccountType: AccountType | undefined = undefined;
+        if (currentEstablishment.type) {
+          // Use API type if available
+          detectedAccountType = currentEstablishment.type === EstablishmentType.BUSINESS ? "juridica" : "fisica";
+        } else if (currentEstablishment.identification_document_number) {
+          // Fallback to document length detection
+          const docLength = currentEstablishment.identification_document_number.replace(/\D/g, '').length;
+          detectedAccountType = docLength === 14 ? "juridica" : "fisica";
+        }
+
         setData(prev => ({
           ...prev,
+          // Set account type from establishment data only if user hasn't manually selected one
+          accountType: accountTypeSetByUser ? prev.accountType : (prev.accountType || detectedAccountType),
+          
           // Map API fields to form fields
           identification_document_number: currentEstablishment.identification_document_number,
           legal_representative_document_number: currentEstablishment.legal_representative_document_number || undefined,
@@ -187,10 +210,17 @@ export function Onboarding() {
           articles_of_incorporation_file_url: currentEstablishment.articles_of_incorporation_file_url || undefined,
           
           // Legacy field mappings for existing UI
-          cnpj: currentEstablishment.identification_document_number,
-          cpfRepresentante: currentEstablishment.legal_representative_document_number || undefined,
-          dataNascimentoRepresentante: currentEstablishment.legal_representative_birth_date || undefined,
-          celularRepresentante: currentEstablishment.legal_representative_phone || undefined,
+          cnpj: detectedAccountType === "juridica" ? formatCNPJ(currentEstablishment.identification_document_number || '') : undefined,
+          cpf: detectedAccountType === "fisica" ? formatCPF(currentEstablishment.identification_document_number || '') : undefined,
+          cpfRepresentante: currentEstablishment.legal_representative_document_number ? formatCPF(currentEstablishment.legal_representative_document_number) : undefined,
+          // Shared fields
+          telefone: currentEstablishment.legal_representative_phone ? formatPhone(currentEstablishment.legal_representative_phone) : undefined,
+          dataNascimento: currentEstablishment.legal_representative_birth_date ? convertDateFromAPI(currentEstablishment.legal_representative_birth_date) : undefined,
+          
+          // Legacy fields for compatibility
+          dataNascimentoRepresentante: currentEstablishment.legal_representative_birth_date ? convertDateFromAPI(currentEstablishment.legal_representative_birth_date) : undefined,
+          celularRepresentante: detectedAccountType === "juridica" && currentEstablishment.legal_representative_phone ? formatPhone(currentEstablishment.legal_representative_phone) : undefined,
+          celular: detectedAccountType === "fisica" && currentEstablishment.legal_representative_phone ? formatPhone(currentEstablishment.legal_representative_phone) : undefined,
           nomeEmpresa: currentEstablishment.company_name || "",
           nomeFantasia: currentEstablishment.trade_name || undefined,
           segmento: currentEstablishment.business_segment || "",
@@ -203,12 +233,10 @@ export function Onboarding() {
           cidade: currentEstablishment.city || "",
           complemento: currentEstablishment.complement || undefined,
         }));
-
-        // Determine account type based on document length (CNPJ vs CPF)
-        if (currentEstablishment.identification_document_number) {
-          const docLength = currentEstablishment.identification_document_number.replace(/\D/g, '').length;
-          const accountType = docLength === 14 ? "juridica" : "fisica";
-          setData(prev => ({ ...prev, accountType }));
+        
+        // If we loaded a valid account type from API, mark it as set by user to prevent overwrites
+        if (detectedAccountType && !accountTypeSetByUser) {
+          setAccountTypeSetByUser(true);
         }
       }
 
@@ -232,11 +260,49 @@ export function Onboarding() {
 
   // Function to convert form data to API format
   const convertToApiFormat = (formData: OnboardingData): EstablishmentUpdate => {
+    // Clean and convert identification document number (shared field for both CPF and CNPJ)
+    const cleanedIdentificationDoc = formData.identification_document_number ? 
+      formData.identification_document_number.replace(/\D/g, '') : undefined;
+    
+    // Clean CPF representative document - only for BUSINESS type, null for PERSONAL type
+    let cleanedRepresentativeDoc: string | null | undefined = undefined;
+    if (formData.accountType === "juridica" && formData.cpfRepresentante) {
+      cleanedRepresentativeDoc = formData.cpfRepresentante.replace(/\D/g, '');
+    } else if (formData.accountType === "fisica") {
+      cleanedRepresentativeDoc = null;
+    }
+    
+    // Convert account type to establishment type enum
+    let establishmentType: EstablishmentType | undefined = undefined;
+    if (formData.accountType === "juridica") {
+      establishmentType = EstablishmentType.BUSINESS;
+    } else if (formData.accountType === "fisica") {
+      establishmentType = EstablishmentType.PERSONAL;
+    }
+    
+    // Convert dates to API format - use shared field first, then fallback to legacy fields
+    let convertedBirthDate: string | undefined;
+    if (formData.dataNascimento) {
+      convertedBirthDate = convertDateToAPI(formData.dataNascimento);
+    } else if (formData.dataNascimentoRepresentante) {
+      convertedBirthDate = convertDateToAPI(formData.dataNascimentoRepresentante);
+    } else if (formData.legal_representative_birth_date) {
+      convertedBirthDate = convertDateToAPI(formData.legal_representative_birth_date);
+    }
+
+    // Clean phone number - use shared field first, then fallback to legacy fields
+    let cleanedPhoneNumber: string | undefined = undefined;
+    const phoneNumber = formData.telefone || formData.celularRepresentante || formData.celular || formData.legal_representative_phone;
+    if (phoneNumber) {
+      cleanedPhoneNumber = phoneNumber.replace(/\D/g, '');
+    }
+
     return {
-      identification_document_number: formData.cnpj || formData.cpf || formData.identification_document_number,
-      legal_representative_document_number: formData.cpfRepresentante || formData.legal_representative_document_number,
-      legal_representative_birth_date: formData.dataNascimentoRepresentante || formData.legal_representative_birth_date,
-      legal_representative_phone: formData.celularRepresentante || formData.celular || formData.legal_representative_phone,
+      identification_document_number: cleanedIdentificationDoc,
+      type: establishmentType,
+      legal_representative_document_number: cleanedRepresentativeDoc,
+      legal_representative_birth_date: convertedBirthDate,
+      legal_representative_phone: cleanedPhoneNumber,
       company_name: formData.nomeEmpresa || formData.company_name,
       trade_name: formData.nomeFantasia || formData.trade_name,
       business_segment: formData.segmento || formData.business_segment,
@@ -255,18 +321,77 @@ export function Onboarding() {
     };
   };
 
-  const saveDataToAPI = async () => {
+  const getStepRelevantFields = (step: number, formData: OnboardingData): Partial<EstablishmentUpdate> => {
+    const apiData = convertToApiFormat(formData);
+    
+    switch (step) {
+      case 1:
+        // Step 1: Account/Personal data
+        return {
+          identification_document_number: apiData.identification_document_number,
+          type: apiData.type,
+          legal_representative_document_number: apiData.legal_representative_document_number,
+          legal_representative_birth_date: apiData.legal_representative_birth_date,
+          legal_representative_phone: apiData.legal_representative_phone,
+        };
+      case 2:
+        // Step 2: Business data
+        return {
+          company_name: apiData.company_name,
+          trade_name: apiData.trade_name,
+          business_segment: apiData.business_segment,
+          website: apiData.website,
+          activity_description: apiData.activity_description,
+        };
+      case 3:
+        // Step 3: Address data
+        return {
+          postal_code: apiData.postal_code,
+          state: apiData.state,
+          city: apiData.city,
+          street: apiData.street,
+          number: apiData.number,
+          complement: apiData.complement,
+          neighborhood: apiData.neighborhood,
+        };
+      case 4:
+        // Step 4: Documents
+        return {
+          identification_document_file_url: apiData.identification_document_file_url,
+          address_proof_file_url: apiData.address_proof_file_url,
+          articles_of_incorporation_file_url: apiData.articles_of_incorporation_file_url,
+        };
+      default:
+        // Full data for step 5 or completion
+        return apiData;
+    }
+  };
+
+  const saveDataToAPI = async (step?: number) => {
     try {
-      const apiData = convertToApiFormat(data);
+      let apiData: Partial<EstablishmentUpdate>;
+      
+      if (step) {
+        // Send only step-relevant fields
+        apiData = getStepRelevantFields(step, data);
+      } else {
+        // Send all data (for completion)
+        apiData = convertToApiFormat(data);
+      }
+
+      // Filter out undefined values
+      const filteredData = Object.fromEntries(
+        Object.entries(apiData).filter(([_, value]) => value !== undefined)
+      ) as EstablishmentUpdate;
       
       if (currentEstablishment) {
         // Update existing establishment
-        await updateEstablishmentMutation.mutateAsync(apiData);
+        await updateEstablishmentMutation.mutateAsync(filteredData);
       } else {
-        // Create new establishment
+        // Create new establishment - need at least identification_document_number
         const createData: EstablishmentCreate = {
-          identification_document_number: apiData.identification_document_number || '',
-          ...apiData
+          identification_document_number: filteredData.identification_document_number || '',
+          ...filteredData
         };
         await createEstablishmentMutation.mutateAsync(createData);
       }
@@ -278,9 +403,11 @@ export function Onboarding() {
 
   const nextStep = async () => {
     // Save data to API when advancing through steps with meaningful data
-    if (currentStep <= 3 && (data.cnpj || data.cpf || data.nomeEmpresa)) {
+    if (currentStep <= 3 && (data.identification_document_number || data.cnpj || data.cpf || data.nomeEmpresa)) {
       try {
-        await saveDataToAPI();
+        await saveDataToAPI(currentStep);
+        // Refresh establishment data after saving
+        await refetchEstablishment();
       } catch (error) {
         // Don't block navigation on save errors, but show toast
         console.error('Failed to save data:', error);
@@ -288,25 +415,25 @@ export function Onboarding() {
     }
     
     if (currentStep < 5) {
-      setCurrentStep(currentStep + 1);
+      const newStep = currentStep + 1;
+      setCurrentStep(newStep);
+      // Update URL with step parameter
+      navigate(`/onboarding?step=${newStep}`, { replace: true });
     }
   };
 
   const prevStep = () => {
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+      const newStep = currentStep - 1;
+      setCurrentStep(newStep);
+      // Update URL with step parameter
+      navigate(`/onboarding?step=${newStep}`, { replace: true });
     }
   };
 
   const handleBackToStart = () => {
-    // Se estamos na primeira etapa e há um tipo de conta selecionado, 
-    // apenas limpa a seleção para permitir escolher novamente
-    if (currentStep === 1 && data.accountType) {
-      updateData("accountType", undefined);
-    } else {
-      // Caso contrário, volta para o dashboard
-      navigate("/");
-    }
+    // Always go back to dashboard - account type can now be changed within step 1
+    navigate("/");
   };
 
   const handleComplete = async () => {
@@ -415,6 +542,71 @@ export function Onboarding() {
            year <= new Date().getFullYear() &&
            date <= new Date();
   };
+
+  // Função para converter data DD/MM/YYYY para YYYY-MM-DD
+  const convertDateToAPI = (dateString: string): string | undefined => {
+    if (!dateString || dateString.length !== 10) return undefined;
+    
+    const [day, month, year] = dateString.split('/');
+    if (!day || !month || !year) return undefined;
+    
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  };
+
+  // Função para converter data YYYY-MM-DD para DD/MM/YYYY
+  const convertDateFromAPI = (dateString: string): string => {
+    if (!dateString) return '';
+    
+    const [year, month, day] = dateString.split('-');
+    if (!year || !month || !day) return '';
+    
+    return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
+  };
+
+  // Função para aplicar máscara CPF
+  const formatCPF = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    
+    if (numbers.length <= 3) {
+      return numbers;
+    } else if (numbers.length <= 6) {
+      return `${numbers.slice(0, 3)}.${numbers.slice(3)}`;
+    } else if (numbers.length <= 9) {
+      return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6)}`;
+    } else {
+      return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6, 9)}-${numbers.slice(9, 11)}`;
+    }
+  };
+
+  // Função para aplicar máscara CNPJ
+  const formatCNPJ = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    
+    if (numbers.length <= 2) {
+      return numbers;
+    } else if (numbers.length <= 5) {
+      return `${numbers.slice(0, 2)}.${numbers.slice(2)}`;
+    } else if (numbers.length <= 8) {
+      return `${numbers.slice(0, 2)}.${numbers.slice(2, 5)}.${numbers.slice(5)}`;
+    } else if (numbers.length <= 12) {
+      return `${numbers.slice(0, 2)}.${numbers.slice(2, 5)}.${numbers.slice(5, 8)}/${numbers.slice(8)}`;
+    } else {
+      return `${numbers.slice(0, 2)}.${numbers.slice(2, 5)}.${numbers.slice(5, 8)}/${numbers.slice(8, 12)}-${numbers.slice(12, 14)}`;
+    }
+  };
+
+  // Função para aplicar máscara telefone
+  const formatPhone = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    
+    if (numbers.length <= 2) {
+      return numbers;
+    } else if (numbers.length <= 7) {
+      return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+    } else {
+      return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
+    }
+  };
   // Função para verificar se os documentos foram enviados
   const getDocumentStatus = () => {
     if (data.accountType === "juridica") {
@@ -453,50 +645,73 @@ export function Onboarding() {
               <p className="text-boost-text-secondary">Selecione o tipo de conta e insira os dados para iniciar o seu cadastro.</p>
             </div>
 
-            {!data.accountType && (
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  onClick={() => updateData("accountType", "juridica")}
-                  className="p-6 border border-boost-border rounded-lg hover:border-boost-accent transition-colors text-center space-y-2"
-                >
-                  <Building2 className="h-8 w-8 text-boost-accent mx-auto" />
-                  <div>
-                    <div className="font-medium text-boost-text-primary">Pessoa Jurídica</div>
-                    <div className="text-sm text-boost-text-secondary">CNPJ</div>
-                  </div>
-                </button>
-                <button
-                  onClick={() => updateData("accountType", "fisica")}
-                  className="p-6 border border-boost-border rounded-lg hover:border-boost-accent transition-colors text-center space-y-2"
-                >
-                  <User className="h-8 w-8 text-boost-accent mx-auto" />
-                  <div>
-                    <div className="font-medium text-boost-text-primary">Pessoa Física</div>
-                    <div className="text-sm text-boost-text-secondary">CPF</div>
-                  </div>
-                </button>
-              </div>
-            )}
+            {/* Account Type Selection */}
+            <Card className="border-boost-border">
+              <CardContent className="p-6 space-y-4">
+                <h3 className="text-lg font-medium text-boost-text-primary">Tipo de Conta</h3>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    onClick={() => {
+                      updateData("accountType", "juridica");
+                      setAccountTypeSetByUser(true);
+                      // Clear the shared document field when changing type
+                      updateData("identification_document_number", "");
+                    }}
+                    className={`p-4 border rounded-lg transition-colors text-center space-y-2 ${
+                      data.accountType === "juridica" 
+                        ? "border-boost-accent bg-boost-accent/10 text-boost-accent"
+                        : "border-boost-border hover:border-boost-accent"
+                    }`}
+                  >
+                    <Building2 className="h-6 w-6 mx-auto" />
+                    <div>
+                      <div className="font-medium">Pessoa Jurídica</div>
+                      <div className="text-xs opacity-70">CNPJ</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      updateData("accountType", "fisica");
+                      setAccountTypeSetByUser(true);
+                      // Clear the shared document field when changing type
+                      updateData("identification_document_number", "");
+                    }}
+                    className={`p-4 border rounded-lg transition-colors text-center space-y-2 ${
+                      data.accountType === "fisica" 
+                        ? "border-boost-accent bg-boost-accent/10 text-boost-accent"
+                        : "border-boost-border hover:border-boost-accent"
+                    }`}
+                  >
+                    <User className="h-6 w-6 mx-auto" />
+                    <div>
+                      <div className="font-medium">Pessoa Física</div>
+                      <div className="text-xs opacity-70">CPF</div>
+                    </div>
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
 
+            {/* Form Fields - Show when account type is selected */}
             {data.accountType && (
               <Card className="border-boost-border">
                 <CardContent className="p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-boost-text-primary">Dados da Conta</h3>
-                    <span className="text-sm px-3 py-1 bg-boost-accent text-white rounded-full">
-                      {data.accountType === "juridica" ? "Pessoa Jurídica" : "Pessoa Física"}
-                    </span>
-                  </div>
+                  <h3 className="text-lg font-medium text-boost-text-primary">Dados Pessoais</h3>
 
                   {data.accountType === "juridica" ? (
                     <>
                       <div className="space-y-2">
-                        <Label htmlFor="cnpj">CNPJ</Label>
+                        <Label htmlFor="identification_document_number">CNPJ</Label>
                         <BoostInput
-                          id="cnpj"
+                          id="identification_document_number"
                           placeholder="00.000.000/0000-00"
-                          value={data.cnpj || ""}
-                          onChange={(e) => updateData("cnpj", e.target.value)}
+                          value={data.identification_document_number ? formatCNPJ(data.identification_document_number) : ""}
+                          onChange={(e) => {
+                            const formatted = formatCNPJ(e.target.value);
+                            updateData("identification_document_number", formatted);
+                          }}
+                          maxLength={18}
                         />
                       </div>
                       <div className="space-y-2">
@@ -505,47 +720,59 @@ export function Onboarding() {
                           id="cpfRepresentante"
                           placeholder="000.000.000-00"
                           value={data.cpfRepresentante || ""}
-                          onChange={(e) => updateData("cpfRepresentante", e.target.value)}
+                          onChange={(e) => {
+                            const formatted = formatCPF(e.target.value);
+                            updateData("cpfRepresentante", formatted);
+                          }}
+                          maxLength={14}
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="dataNascimentoRepresentante">Data de nascimento do representante legal</Label>
+                        <Label htmlFor="dataNascimento">Data de nascimento do representante legal</Label>
                         <BoostInput
-                          id="dataNascimentoRepresentante"
+                          id="dataNascimento"
                           placeholder="DD/MM/AAAA"
                           icon={<Calendar className="h-4 w-4" />}
-                          value={data.dataNascimentoRepresentante || ""}
+                          value={data.dataNascimento || ""}
                           onChange={(e) => {
                             const formatted = formatDateInput(e.target.value);
-                            updateData("dataNascimentoRepresentante", formatted);
+                            updateData("dataNascimento", formatted);
                           }}
                           maxLength={10}
                         />
-                        {data.dataNascimentoRepresentante && !isValidDate(data.dataNascimentoRepresentante) && (
+                        {data.dataNascimento && !isValidDate(data.dataNascimento) && (
                           <p className="text-xs text-red-500">
                             Digite uma data válida no formato DD/MM/AAAA
                           </p>
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="celularRepresentante">Celular do representante legal</Label>
+                        <Label htmlFor="telefone">Celular do representante legal</Label>
                         <BoostInput
-                          id="celularRepresentante"
+                          id="telefone"
                           placeholder="(00) 00000-0000"
-                          value={data.celularRepresentante || ""}
-                          onChange={(e) => updateData("celularRepresentante", e.target.value)}
+                          value={data.telefone || ""}
+                          onChange={(e) => {
+                            const formatted = formatPhone(e.target.value);
+                            updateData("telefone", formatted);
+                          }}
+                          maxLength={15}
                         />
                       </div>
                     </>
                   ) : (
                     <>
                       <div className="space-y-2">
-                        <Label htmlFor="cpf">CPF</Label>
+                        <Label htmlFor="identification_document_number_pf">CPF</Label>
                         <BoostInput
-                          id="cpf"
+                          id="identification_document_number_pf"
                           placeholder="000.000.000-00"
-                          value={data.cpf || ""}
-                          onChange={(e) => updateData("cpf", e.target.value)}
+                          value={data.identification_document_number ? formatCPF(data.identification_document_number) : ""}
+                          onChange={(e) => {
+                            const formatted = formatCPF(e.target.value);
+                            updateData("identification_document_number", formatted);
+                          }}
+                          maxLength={14}
                         />
                       </div>
                       <div className="space-y-2">
@@ -568,12 +795,16 @@ export function Onboarding() {
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="celular">Celular</Label>
+                        <Label htmlFor="telefone">Celular</Label>
                         <BoostInput
-                          id="celular"
+                          id="telefone"
                           placeholder="(00) 00000-0000"
-                          value={data.celular || ""}
-                          onChange={(e) => updateData("celular", e.target.value)}
+                          value={data.telefone || ""}
+                          onChange={(e) => {
+                            const formatted = formatPhone(e.target.value);
+                            updateData("telefone", formatted);
+                          }}
+                          maxLength={15}
                         />
                       </div>
                     </>
@@ -1089,7 +1320,7 @@ export function Onboarding() {
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <span className="text-boost-text-secondary">CNPJ:</span>
-                          <p className="font-medium">{data.cnpj}</p>
+                          <p className="font-medium">{data.identification_document_number ? formatCNPJ(data.identification_document_number) : data.cnpj}</p>
                         </div>
                         <div>
                           <span className="text-boost-text-secondary">CPF do Representante:</span>
@@ -1101,7 +1332,7 @@ export function Onboarding() {
                         </div>
                         <div>
                           <span className="text-boost-text-secondary">Celular:</span>
-                          <p className="font-medium">{data.celularRepresentante}</p>
+                          <p className="font-medium">{data.telefone}</p>
                         </div>
                       </div>
                     </div>
@@ -1111,7 +1342,7 @@ export function Onboarding() {
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <span className="text-boost-text-secondary">CPF:</span>
-                          <p className="font-medium">{data.cpf}</p>
+                          <p className="font-medium">{data.identification_document_number ? formatCPF(data.identification_document_number) : data.cpf}</p>
                         </div>
                         <div>
                           <span className="text-boost-text-secondary">Data de Nascimento:</span>
@@ -1119,7 +1350,7 @@ export function Onboarding() {
                         </div>
                         <div>
                           <span className="text-boost-text-secondary">Celular:</span>
-                          <p className="font-medium">{data.celular}</p>
+                          <p className="font-medium">{data.telefone}</p>
                         </div>
                       </div>
                     </div>
@@ -1311,7 +1542,7 @@ export function Onboarding() {
                   className="flex items-center space-x-2 text-boost-text-secondary hover:text-boost-text-primary"
                 >
                   <ArrowLeft className="h-4 w-4" />
-                  <span>{data.accountType ? "Voltar ao início" : "Voltar ao início"}</span>
+                  <span>Voltar ao dashboard</span>
                 </Button>
               )}
 
@@ -1320,8 +1551,7 @@ export function Onboarding() {
                   onClick={nextStep} 
                   className="flex items-center space-x-2"
                   disabled={
-                    (!data.accountType && currentStep === 1) || 
-                    (currentStep === 4 && !checkAllDocumentsUploaded())
+                    !data.accountType && currentStep === 1
                   }
                 >
                   <span>Continuar</span>
