@@ -26,6 +26,7 @@ import {
 } from "@/hooks/useEstablishments";
 import { EstablishmentUpdate, EstablishmentCreate, EstablishmentType } from "@/types/api";
 import { handleApiError } from "@/services/api";
+import { uploadFile, validateFile } from "@/services/documentUpload";
 
 type AccountType = "juridica" | "fisica";
 
@@ -59,11 +60,11 @@ interface OnboardingData {
   confirmarSenha?: string;
   aceitaTermos?: boolean;
   
-  // Document files (local state before upload)
-  contratoSocial?: File;
-  rgRepresentante?: File;
-  cpfDocumento?: File;
-  comprovanteEndereco?: File;
+  // Document information (stored after upload)
+  contratoSocial?: { file: File; documentId?: number; url?: string; uploading?: boolean; error?: boolean };
+  rgRepresentante?: { file: File; documentId?: number; url?: string; uploading?: boolean; error?: boolean };
+  cpfDocumento?: { file: File; documentId?: number; url?: string; uploading?: boolean; error?: boolean };
+  comprovanteEndereco?: { file: File; documentId?: number; url?: string; uploading?: boolean; error?: boolean };
 
   // Shared fields for both account types
   telefone?: string; // Shared phone field for both juridica and fisica
@@ -102,6 +103,7 @@ export function Onboarding() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [accountTypeSetByUser, setAccountTypeSetByUser] = useState(false);
+  const [showDateValidation, setShowDateValidation] = useState(false);
   const [data, setData] = useState<OnboardingData>({
     accountType: undefined as any,
     nomeEmpresa: "",
@@ -254,6 +256,22 @@ export function Onboarding() {
     return () => clearTimeout(timer);
   }, [currentEstablishment, establishmentLoading, searchParams]);
 
+  // Debounced date validation
+  useEffect(() => {
+    if (data.dataNascimento && data.dataNascimento.length > 0) {
+      const timer = setTimeout(() => {
+        setShowDateValidation(true);
+      }, 2000);
+
+      return () => {
+        clearTimeout(timer);
+        setShowDateValidation(false);
+      };
+    } else {
+      setShowDateValidation(false);
+    }
+  }, [data.dataNascimento]);
+
   const updateData = (field: string, value: any) => {
     setData(prev => ({ ...prev, [field]: value }));
   };
@@ -297,7 +315,29 @@ export function Onboarding() {
       cleanedPhoneNumber = phoneNumber.replace(/\D/g, '');
     }
 
-    return {
+    // Map document IDs based on your specification
+    let identificationDocumentId: number | null | undefined = undefined;
+    let addressProofDocumentId: number | null | undefined = undefined;
+    let articlesOfIncorporationDocumentId: number | null | undefined = undefined;
+
+    if (formData.accountType === "juridica") {
+      // For juridica (business):
+      // - contratoSocial maps to articles_of_incorporation_document_id
+      // - rgRepresentante maps to identification_document_id
+      // - comprovanteEndereco maps to address_proof_document_id
+      articlesOfIncorporationDocumentId = formData.contratoSocial?.documentId || null;
+      identificationDocumentId = formData.rgRepresentante?.documentId || null;
+      addressProofDocumentId = formData.comprovanteEndereco?.documentId || null;
+    } else if (formData.accountType === "fisica") {
+      // For fisica (personal):
+      // - cpfDocumento maps to identification_document_id
+      // - comprovanteEndereco maps to address_proof_document_id
+      identificationDocumentId = formData.cpfDocumento?.documentId || null;
+      addressProofDocumentId = formData.comprovanteEndereco?.documentId || null;
+      articlesOfIncorporationDocumentId = null; // Not applicable for personal accounts
+    }
+
+    const result: any = {
       identification_document_number: cleanedIdentificationDoc,
       type: establishmentType,
       legal_representative_document_number: cleanedRepresentativeDoc,
@@ -315,10 +355,20 @@ export function Onboarding() {
       number: formData.numero || formData.number,
       complement: formData.complemento || formData.complement,
       neighborhood: formData.bairro || formData.neighborhood,
-      identification_document_file_url: formData.identification_document_file_url,
-      address_proof_file_url: formData.address_proof_file_url,
-      articles_of_incorporation_file_url: formData.articles_of_incorporation_file_url,
     };
+
+    // Only include document IDs when they have actual values
+    if (identificationDocumentId) {
+      result.identification_document_id = identificationDocumentId;
+    }
+    if (addressProofDocumentId) {
+      result.address_proof_document_id = addressProofDocumentId;
+    }
+    if (articlesOfIncorporationDocumentId) {
+      result.articles_of_incorporation_document_id = articlesOfIncorporationDocumentId;
+    }
+
+    return result;
   };
 
   const getStepRelevantFields = (step: number, formData: OnboardingData): Partial<EstablishmentUpdate> => {
@@ -355,11 +405,11 @@ export function Onboarding() {
           neighborhood: apiData.neighborhood,
         };
       case 4:
-        // Step 4: Documents
+        // Step 4: Documents (only document IDs, no file URLs)
         return {
-          identification_document_file_url: apiData.identification_document_file_url,
-          address_proof_file_url: apiData.address_proof_file_url,
-          articles_of_incorporation_file_url: apiData.articles_of_incorporation_file_url,
+          identification_document_id: apiData.identification_document_id,
+          address_proof_document_id: apiData.address_proof_document_id,
+          articles_of_incorporation_document_id: apiData.articles_of_incorporation_document_id,
         };
       default:
         // Full data for step 5 or completion
@@ -384,6 +434,8 @@ export function Onboarding() {
         Object.entries(apiData).filter(([_, value]) => value !== undefined)
       ) as EstablishmentUpdate;
       
+
+      
       if (currentEstablishment) {
         // Update existing establishment
         await updateEstablishmentMutation.mutateAsync(filteredData);
@@ -403,11 +455,12 @@ export function Onboarding() {
 
   const nextStep = async () => {
     // Save data to API when advancing through steps with meaningful data
-    if (currentStep <= 3 && (data.identification_document_number || data.cnpj || data.cpf || data.nomeEmpresa)) {
+    const hasBasicData = data.identification_document_number || data.cnpj || data.cpf || data.nomeEmpresa;
+    const hasDocuments = data.contratoSocial || data.rgRepresentante || data.cpfDocumento || data.comprovanteEndereco;
+    
+    if (currentStep <= 4 && (hasBasicData || (currentStep === 4 && hasDocuments))) {
       try {
         await saveDataToAPI(currentStep);
-        // Refresh establishment data after saving
-        await refetchEstablishment();
       } catch (error) {
         // Don't block navigation on save errors, but show toast
         console.error('Failed to save data:', error);
@@ -480,30 +533,94 @@ export function Onboarding() {
   // Função para verificar se todos os documentos obrigatórios foram enviados
   const checkAllDocumentsUploaded = () => {
     if (data.accountType === "juridica") {
-      return !!(data.contratoSocial && data.rgRepresentante && data.comprovanteEndereco);
+      return !!(
+        data.contratoSocial?.documentId && 
+        data.rgRepresentante?.documentId && 
+        data.comprovanteEndereco?.documentId
+      );
     } else {
-      return !!(data.cpfDocumento && data.comprovanteEndereco);
+      return !!(
+        data.cpfDocumento?.documentId && 
+        data.comprovanteEndereco?.documentId
+      );
     }
   };
 
-  const handleFileUpload = (field: string, file: File | null) => {
-    updateData(field, file);
-    
-    // Verificar se todos os documentos foram enviados após o upload
-    setTimeout(() => {
-      const allDocsComplete = checkAllDocumentsUploaded();
-      if (allDocsComplete) {
-        // Salvar no localStorage que todos os documentos foram enviados
-        localStorage.setItem('allDocumentsCompleted', 'true');
-        
-        // Mostrar toast de sucesso
-        toast({
-          title: "✅ Todos os Documentos Enviados!",
-          description: "Parabéns! Todos os documentos obrigatórios foram enviados com sucesso. O lembrete na tela inicial será removido automaticamente.",
-          duration: 5000,
-        });
-      }
-    }, 100);
+  const handleFileUpload = async (field: string, file: File | null) => {
+    if (!file) {
+      updateData(field, null);
+      return;
+    }
+
+    // Validate file before upload
+    const validation = validateFile(file, 5);
+    if (!validation.isValid) {
+      toast({
+        title: "Erro no arquivo",
+        description: validation.error,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Set uploading state and clear any previous error
+    updateData(field, { file, uploading: true, error: false });
+
+    try {
+      // Get document title based on field
+      const getDocumentTitle = (fieldName: string) => {
+        switch (fieldName) {
+          case 'contratoSocial': return 'Contrato Social / CNPJ';
+          case 'rgRepresentante': return 'RG/CNH do Representante';
+          case 'cpfDocumento': return 'RG ou CNH';
+          case 'comprovanteEndereco': return 'Comprovante de Endereço';
+          default: return 'Documento';
+        }
+      };
+
+      // Upload file using API
+      const document = await uploadFile(file, getDocumentTitle(field));
+
+      // Update data with successful upload
+      updateData(field, {
+        file,
+        documentId: document.id,
+        url: document.download_url || `${document.s3_bucket}/${document.s3_key}`,
+        uploading: false,
+        error: false
+      });
+
+      toast({
+        title: "✅ Arquivo enviado com sucesso!",
+        description: `${getDocumentTitle(field)} foi enviado e está sendo processado.`,
+        duration: 3000,
+      });
+
+      // Check if all documents are now uploaded
+      setTimeout(() => {
+        const allDocsComplete = checkAllDocumentsUploaded();
+        if (allDocsComplete) {
+          localStorage.setItem('allDocumentsCompleted', 'true');
+          toast({
+            title: "✅ Todos os Documentos Enviados!",
+            description: "Parabéns! Todos os documentos obrigatórios foram enviados com sucesso. O lembrete na tela inicial será removido automaticamente.",
+            duration: 5000,
+          });
+        }
+      }, 100);
+
+    } catch (error) {
+      console.error('File upload failed:', error);
+      
+      // Set error state while keeping file info for retry
+      updateData(field, { file, uploading: false, error: true });
+      
+      toast({
+        title: "Erro no envio",
+        description: "Falha ao enviar o arquivo. Tente novamente.",
+        variant: "destructive",
+      });
+    }
   };
 
   const openFileSelector = (inputId: string) => {
@@ -511,6 +628,33 @@ export function Onboarding() {
     if (input) {
       input.click();
     }
+  };
+
+  // Helper function to get file status display
+  const getFileStatusDisplay = (docData: any, fieldName?: string) => {
+    if (!docData) return null;
+    
+    if (docData.uploading) {
+      return <p className="text-xs text-blue-600 mt-1">📤 Enviando...</p>;
+    }
+    
+    if (docData.error) {
+      return (
+        <p 
+          className="text-xs text-red-600 mt-1 cursor-pointer hover:text-red-700 hover:underline" 
+          onClick={() => fieldName && handleFileUpload(fieldName, docData.file)}
+        >
+          ❌ Erro no envio - Clique para tentar novamente
+        </p>
+      );
+    }
+    
+    if (docData.documentId || docData.url) {
+      return <p className="text-xs text-green-600 mt-1">✓ {docData.file.name}</p>;
+    }
+    
+    // Fallback - should not happen with new logic
+    return <p className="text-xs text-gray-600 mt-1">Aguardando envio...</p>;
   };
 
   // Função para formatar data no input (DD/MM/AAAA)
@@ -740,7 +884,7 @@ export function Onboarding() {
                           }}
                           maxLength={10}
                         />
-                        {data.dataNascimento && !isValidDate(data.dataNascimento) && (
+                        {data.dataNascimento && showDateValidation && !isValidDate(data.dataNascimento) && (
                           <p className="text-xs text-red-500">
                             Digite uma data válida no formato DD/MM/AAAA
                           </p>
@@ -788,7 +932,7 @@ export function Onboarding() {
                           }}
                           maxLength={10}
                         />
-                        {data.dataNascimento && !isValidDate(data.dataNascimento) && (
+                        {data.dataNascimento && showDateValidation && !isValidDate(data.dataNascimento) && (
                           <p className="text-xs text-red-500">
                             Digite uma data válida no formato DD/MM/AAAA
                           </p>
@@ -1056,11 +1200,7 @@ export function Onboarding() {
                         >
                           Selecionar arquivo
                         </Button>
-                        {data.contratoSocial && (
-                          <p className="text-xs text-green-600 mt-1">
-                            ✓ {data.contratoSocial.name}
-                          </p>
-                        )}
+                        {data.contratoSocial && getFileStatusDisplay(data.contratoSocial, "contratoSocial")}
                       </div>
 
                       <div className="border-2 border-dashed border-boost-border rounded-lg p-8 text-center">
@@ -1085,11 +1225,7 @@ export function Onboarding() {
                         >
                           Selecionar arquivo
                         </Button>
-                        {data.rgRepresentante && (
-                          <p className="text-xs text-green-600 mt-1">
-                            ✓ {data.rgRepresentante.name}
-                          </p>
-                        )}
+                        {data.rgRepresentante && getFileStatusDisplay(data.rgRepresentante, "rgRepresentante")}
                       </div>
 
                       <div className="border-2 border-dashed border-boost-border rounded-lg p-8 text-center">
@@ -1114,11 +1250,7 @@ export function Onboarding() {
                         >
                           Selecionar arquivo
                         </Button>
-                        {data.comprovanteEndereco && (
-                          <p className="text-xs text-green-600 mt-1">
-                            ✓ {data.comprovanteEndereco.name}
-                          </p>
-                        )}
+                        {data.comprovanteEndereco && getFileStatusDisplay(data.comprovanteEndereco, "comprovanteEndereco")}
                       </div>
                     </>
                   ) : (
@@ -1145,11 +1277,7 @@ export function Onboarding() {
                         >
                           Selecionar arquivo
                         </Button>
-                        {data.cpfDocumento && (
-                          <p className="text-xs text-green-600 mt-1">
-                            ✓ {data.cpfDocumento.name}
-                          </p>
-                        )}
+                        {data.cpfDocumento && getFileStatusDisplay(data.cpfDocumento, "cpfDocumento")}
                       </div>
 
                       <div className="border-2 border-dashed border-boost-border rounded-lg p-8 text-center">
@@ -1174,11 +1302,7 @@ export function Onboarding() {
                         >
                           Selecionar arquivo
                         </Button>
-                        {data.comprovanteEndereco && (
-                          <p className="text-xs text-green-600 mt-1">
-                            ✓ {data.comprovanteEndereco.name}
-                          </p>
-                        )}
+                        {data.comprovanteEndereco && getFileStatusDisplay(data.comprovanteEndereco, "comprovanteEndereco")}
                       </div>
                     </>
                   )}
@@ -1244,29 +1368,29 @@ export function Onboarding() {
                     {data.accountType === "juridica" ? (
                       <>
                         <div className="flex items-center space-x-2 text-xs">
-                          {data.contratoSocial ? 
+                          {data.contratoSocial?.documentId ? 
                             <CheckCircle className="h-3 w-3 text-green-600" /> : 
                             <div className="h-3 w-3 rounded-full border border-amber-400"></div>
                           }
-                          <span className={data.contratoSocial ? 'text-green-700' : 'text-blue-700'}>
+                          <span className={data.contratoSocial?.documentId ? 'text-green-700' : 'text-blue-700'}>
                             Contrato Social ou CNPJ
                           </span>
                         </div>
                         <div className="flex items-center space-x-2 text-xs">
-                          {data.rgRepresentante ? 
+                          {data.rgRepresentante?.documentId ? 
                             <CheckCircle className="h-3 w-3 text-green-600" /> : 
                             <div className="h-3 w-3 rounded-full border border-blue-400"></div>
                           }
-                          <span className={data.rgRepresentante ? 'text-green-700' : 'text-blue-700'}>
+                          <span className={data.rgRepresentante?.documentId ? 'text-green-700' : 'text-blue-700'}>
                             RG/CNH do representante legal
                           </span>
                         </div>
                         <div className="flex items-center space-x-2 text-xs">
-                          {data.comprovanteEndereco ? 
+                          {data.comprovanteEndereco?.documentId ? 
                             <CheckCircle className="h-3 w-3 text-green-600" /> : 
                             <div className="h-3 w-3 rounded-full border border-blue-400"></div>
                           }
-                          <span className={data.comprovanteEndereco ? 'text-green-700' : 'text-blue-700'}>
+                          <span className={data.comprovanteEndereco?.documentId ? 'text-green-700' : 'text-blue-700'}>
                             Comprovante de endereço da empresa
                           </span>
                         </div>
@@ -1274,20 +1398,20 @@ export function Onboarding() {
                     ) : (
                       <>
                         <div className="flex items-center space-x-2 text-xs">
-                          {data.cpfDocumento ? 
+                          {data.cpfDocumento?.documentId ? 
                             <CheckCircle className="h-3 w-3 text-green-600" /> : 
                             <div className="h-3 w-3 rounded-full border border-blue-400"></div>
                           }
-                          <span className={data.cpfDocumento ? 'text-green-700' : 'text-blue-700'}>
+                          <span className={data.cpfDocumento?.documentId ? 'text-green-700' : 'text-blue-700'}>
                             RG ou CNH
                           </span>
                         </div>
                         <div className="flex items-center space-x-2 text-xs">
-                          {data.comprovanteEndereco ? 
+                          {data.comprovanteEndereco?.documentId ? 
                             <CheckCircle className="h-3 w-3 text-green-600" /> : 
                             <div className="h-3 w-3 rounded-full border border-blue-400"></div>
                           }
-                          <span className={data.comprovanteEndereco ? 'text-green-700' : 'text-blue-700'}>
+                          <span className={data.comprovanteEndereco?.documentId ? 'text-green-700' : 'text-blue-700'}>
                             Comprovante de endereço
                           </span>
                         </div>
@@ -1519,7 +1643,7 @@ export function Onboarding() {
               <Button 
                 variant="ghost" 
                 onClick={() => navigate("/")}
-                className="flex items-center space-x-2 text-boost-text-secondary hover:text-boost-accent"
+                className="flex items-center space-x-2 text-boost-text-secondary hover:text-boost-text-primary hover:bg-boost-bg-secondary"
               >
                 <ArrowLeft className="h-4 w-4" />
                 <span>Voltar para tela principal</span>

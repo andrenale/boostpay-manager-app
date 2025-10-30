@@ -196,6 +196,9 @@ export interface EstablishmentUpdate {
   identification_document_file_url?: string | null;
   address_proof_file_url?: string | null;
   articles_of_incorporation_file_url?: string | null;
+  identification_document_id?: number | null;
+  address_proof_document_id?: number | null;
+  articles_of_incorporation_document_id?: number | null;
 }
 
 // Document Types
