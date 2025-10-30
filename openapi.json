@@ -283,27 +283,28 @@
         }
       }
     },
-    "/documents/": {
+    "/documents/upload/request": {
       "post": {
         "tags": ["documents"],
-        "summary": "Create Document",
-        "description": "Create a new document",
-        "operationId": "create_document_documents__post",
-        "security": [{ "HTTPBearer": [] }],
+        "summary": "Request Upload Url",
+        "description": "Request a presigned URL for direct upload to S3.\nThis is the modern, secure way to handle file uploads.",
+        "operationId": "request_upload_url_documents_upload_request_post",
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/DocumentCreate" }
+              "schema": { "$ref": "#/components/schemas/DocumentUploadRequest" }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/DocumentResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentUploadResponse"
+                }
               }
             }
           },
@@ -315,13 +316,16 @@
               }
             }
           }
-        }
-      },
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/documents/": {
       "get": {
         "tags": ["documents"],
-        "summary": "List Documents",
-        "description": "List user's documents",
-        "operationId": "list_documents_documents__get",
+        "summary": "Read Documents",
+        "description": "Get all documents for the current user",
+        "operationId": "read_documents_documents__get",
         "security": [{ "HTTPBearer": [] }],
         "parameters": [
           {
@@ -345,62 +349,8 @@
                 "schema": {
                   "type": "array",
                   "items": { "$ref": "#/components/schemas/DocumentResponse" },
-                  "title": "Response List Documents Documents  Get"
+                  "title": "Response Read Documents Documents  Get"
                 }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/documents/upload": {
-      "post": {
-        "tags": ["documents"],
-        "summary": "Upload Document",
-        "description": "Upload a document file",
-        "operationId": "upload_document_documents_upload_post",
-        "security": [{ "HTTPBearer": [] }],
-        "parameters": [
-          {
-            "name": "title",
-            "in": "query",
-            "required": true,
-            "schema": { "type": "string", "title": "Title" }
-          },
-          {
-            "name": "content",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "string" }, { "type": "null" }],
-              "title": "Content"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_upload_document_documents_upload_post"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/DocumentResponse" }
               }
             }
           },
@@ -418,9 +368,9 @@
     "/documents/{document_id}": {
       "get": {
         "tags": ["documents"],
-        "summary": "Get Document",
-        "description": "Get document by ID",
-        "operationId": "get_document_documents__document_id__get",
+        "summary": "Read Document",
+        "description": "Get a specific document by ID",
+        "operationId": "read_document_documents__document_id__get",
         "security": [{ "HTTPBearer": [] }],
         "parameters": [
           {
@@ -452,7 +402,7 @@
       "put": {
         "tags": ["documents"],
         "summary": "Update Document",
-        "description": "Update document by ID",
+        "description": "Update document metadata (title only). Files cannot be updated, only replaced.",
         "operationId": "update_document_documents__document_id__put",
         "security": [{ "HTTPBearer": [] }],
         "parameters": [
@@ -493,8 +443,93 @@
       "delete": {
         "tags": ["documents"],
         "summary": "Delete Document",
-        "description": "Delete document by ID",
+        "description": "Delete a document and its associated file from S3",
         "operationId": "delete_document_documents__document_id__delete",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "title": "Document Id" }
+          },
+          {
+            "name": "force_delete",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Force delete even if S3 deletion fails",
+              "default": false,
+              "title": "Force Delete"
+            },
+            "description": "Force delete even if S3 deletion fails"
+          }
+        ],
+        "responses": {
+          "204": { "description": "Successful Response" },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/download": {
+      "get": {
+        "tags": ["documents"],
+        "summary": "Get Download Url",
+        "description": "Get a presigned download URL for a document.\nReturns a temporary URL that allows direct download from S3.",
+        "operationId": "get_download_url_documents__document_id__download_get",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "title": "Document Id" }
+          },
+          {
+            "name": "expires_in",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 86400,
+              "minimum": 60,
+              "description": "URL expiration time in seconds",
+              "default": 3600,
+              "title": "Expires In"
+            },
+            "description": "URL expiration time in seconds"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/confirm-upload": {
+      "post": {
+        "tags": ["documents"],
+        "summary": "Confirm Upload Completion",
+        "description": "Confirm that a presigned upload has been completed successfully.\nThis validates the upload and updates the document record.",
+        "operationId": "confirm_upload_completion_documents__document_id__confirm_upload_post",
         "security": [{ "HTTPBearer": [] }],
         "parameters": [
           {
@@ -504,8 +539,25 @@
             "schema": { "type": "integer", "title": "Document Id" }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentUploadConfirmation"
+              }
+            }
+          }
+        },
         "responses": {
-          "204": { "description": "Successful Response" },
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DocumentResponse" }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1321,14 +1373,6 @@
   },
   "components": {
     "schemas": {
-      "Body_upload_document_documents_upload_post": {
-        "properties": {
-          "file": { "type": "string", "format": "binary", "title": "File" }
-        },
-        "type": "object",
-        "required": ["file"],
-        "title": "Body_upload_document_documents_upload_post"
-      },
       "CustomerCreate": {
         "properties": {
           "establishment_id": {
@@ -1458,23 +1502,6 @@
         "type": "object",
         "title": "CustomerUpdate"
       },
-      "DocumentCreate": {
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Title"
-          },
-          "content": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Content"
-          }
-        },
-        "type": "object",
-        "required": ["title"],
-        "title": "DocumentCreate"
-      },
       "DocumentResponse": {
         "properties": {
           "title": {
@@ -1483,22 +1510,21 @@
             "minLength": 1,
             "title": "Title"
           },
-          "content": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Content"
-          },
           "id": { "type": "integer", "title": "Id" },
-          "file_path": {
+          "s3_key": { "type": "string", "title": "S3 Key" },
+          "s3_bucket": { "type": "string", "title": "S3 Bucket" },
+          "s3_etag": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "File Path"
+            "title": "S3 Etag"
           },
-          "file_type": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "File Type"
-          },
+          "file_type": { "type": "string", "title": "File Type" },
           "file_size": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "File Size"
+          },
+          "original_filename": {
+            "type": "string",
+            "title": "Original Filename"
           },
           "owner_id": { "type": "integer", "title": "Owner Id" },
           "created_at": {
@@ -1510,10 +1536,24 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "download_url": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Download Url"
           }
         },
         "type": "object",
-        "required": ["title", "id", "owner_id", "created_at", "updated_at"],
+        "required": [
+          "title",
+          "id",
+          "s3_key",
+          "s3_bucket",
+          "file_type",
+          "original_filename",
+          "owner_id",
+          "created_at",
+          "updated_at"
+        ],
         "title": "DocumentResponse"
       },
       "DocumentUpdate": {
@@ -1524,14 +1564,81 @@
               { "type": "null" }
             ],
             "title": "Title"
-          },
-          "content": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Content"
           }
         },
         "type": "object",
         "title": "DocumentUpdate"
+      },
+      "DocumentUploadConfirmation": {
+        "properties": {
+          "etag": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Etag"
+          },
+          "file_size": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "File Size"
+          }
+        },
+        "type": "object",
+        "title": "DocumentUploadConfirmation",
+        "description": "Request body for confirming upload completion"
+      },
+      "DocumentUploadRequest": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "filename": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Filename"
+          },
+          "content_type": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Content Type"
+          },
+          "file_size": {
+            "anyOf": [
+              { "type": "integer", "exclusiveMinimum": 0.0 },
+              { "type": "null" }
+            ],
+            "title": "File Size"
+          }
+        },
+        "type": "object",
+        "required": ["title", "filename", "content_type"],
+        "title": "DocumentUploadRequest",
+        "description": "Schema for requesting a presigned upload URL"
+      },
+      "DocumentUploadResponse": {
+        "properties": {
+          "document_id": { "type": "integer", "title": "Document Id" },
+          "upload_url": { "type": "string", "title": "Upload Url" },
+          "upload_fields": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Upload Fields"
+          },
+          "s3_key": { "type": "string", "title": "S3 Key" },
+          "expires_in": { "type": "integer", "title": "Expires In" }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "upload_url",
+          "upload_fields",
+          "s3_key",
+          "expires_in"
+        ],
+        "title": "DocumentUploadResponse",
+        "description": "Response containing presigned upload URL and metadata"
       },
       "DocumentWithOwner": {
         "properties": {
@@ -1541,22 +1648,21 @@
             "minLength": 1,
             "title": "Title"
           },
-          "content": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Content"
-          },
           "id": { "type": "integer", "title": "Id" },
-          "file_path": {
+          "s3_key": { "type": "string", "title": "S3 Key" },
+          "s3_bucket": { "type": "string", "title": "S3 Bucket" },
+          "s3_etag": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "File Path"
+            "title": "S3 Etag"
           },
-          "file_type": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "File Type"
-          },
+          "file_type": { "type": "string", "title": "File Type" },
           "file_size": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "File Size"
+          },
+          "original_filename": {
+            "type": "string",
+            "title": "Original Filename"
           },
           "owner_id": { "type": "integer", "title": "Owner Id" },
           "created_at": {
@@ -1569,12 +1675,20 @@
             "format": "date-time",
             "title": "Updated At"
           },
+          "download_url": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Download Url"
+          },
           "owner": { "$ref": "#/components/schemas/UserResponse" }
         },
         "type": "object",
         "required": [
           "title",
           "id",
+          "s3_key",
+          "s3_bucket",
+          "file_type",
+          "original_filename",
           "owner_id",
           "created_at",
           "updated_at",
@@ -1706,41 +1820,29 @@
             ],
             "title": "Neighborhood"
           },
-          "identification_document_file_url": {
+          "identification_document_id": {
             "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 2083,
-                "minLength": 1,
-                "format": "uri"
-              },
+              { "type": "integer", "exclusiveMinimum": 0.0 },
               { "type": "null" }
             ],
-            "title": "Identification Document File Url"
+            "title": "Identification Document Id",
+            "description": "ID of identification document"
           },
-          "address_proof_file_url": {
+          "address_proof_document_id": {
             "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 2083,
-                "minLength": 1,
-                "format": "uri"
-              },
+              { "type": "integer", "exclusiveMinimum": 0.0 },
               { "type": "null" }
             ],
-            "title": "Address Proof File Url"
+            "title": "Address Proof Document Id",
+            "description": "ID of address proof document"
           },
-          "articles_of_incorporation_file_url": {
+          "articles_of_incorporation_document_id": {
             "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 2083,
-                "minLength": 1,
-                "format": "uri"
-              },
+              { "type": "integer", "exclusiveMinimum": 0.0 },
               { "type": "null" }
             ],
-            "title": "Articles Of Incorporation File Url"
+            "title": "Articles Of Incorporation Document Id",
+            "description": "ID of articles of incorporation document"
           }
         },
         "type": "object",
@@ -1871,41 +1973,29 @@
             ],
             "title": "Neighborhood"
           },
-          "identification_document_file_url": {
+          "identification_document_id": {
             "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 2083,
-                "minLength": 1,
-                "format": "uri"
-              },
+              { "type": "integer", "exclusiveMinimum": 0.0 },
               { "type": "null" }
             ],
-            "title": "Identification Document File Url"
+            "title": "Identification Document Id",
+            "description": "ID of identification document"
           },
-          "address_proof_file_url": {
+          "address_proof_document_id": {
             "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 2083,
-                "minLength": 1,
-                "format": "uri"
-              },
+              { "type": "integer", "exclusiveMinimum": 0.0 },
               { "type": "null" }
             ],
-            "title": "Address Proof File Url"
+            "title": "Address Proof Document Id",
+            "description": "ID of address proof document"
           },
-          "articles_of_incorporation_file_url": {
+          "articles_of_incorporation_document_id": {
             "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 2083,
-                "minLength": 1,
-                "format": "uri"
-              },
+              { "type": "integer", "exclusiveMinimum": 0.0 },
               { "type": "null" }
             ],
-            "title": "Articles Of Incorporation File Url"
+            "title": "Articles Of Incorporation Document Id",
+            "description": "ID of articles of incorporation document"
           },
           "id": { "type": "integer", "title": "Id" },
           "created_at": {
@@ -2057,41 +2147,29 @@
             ],
             "title": "Neighborhood"
           },
-          "identification_document_file_url": {
+          "identification_document_id": {
             "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 2083,
-                "minLength": 1,
-                "format": "uri"
-              },
+              { "type": "integer", "exclusiveMinimum": 0.0 },
               { "type": "null" }
             ],
-            "title": "Identification Document File Url"
+            "title": "Identification Document Id",
+            "description": "ID of identification document"
           },
-          "address_proof_file_url": {
+          "address_proof_document_id": {
             "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 2083,
-                "minLength": 1,
-                "format": "uri"
-              },
+              { "type": "integer", "exclusiveMinimum": 0.0 },
               { "type": "null" }
             ],
-            "title": "Address Proof File Url"
+            "title": "Address Proof Document Id",
+            "description": "ID of address proof document"
           },
-          "articles_of_incorporation_file_url": {
+          "articles_of_incorporation_document_id": {
             "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 2083,
-                "minLength": 1,
-                "format": "uri"
-              },
+              { "type": "integer", "exclusiveMinimum": 0.0 },
               { "type": "null" }
             ],
-            "title": "Articles Of Incorporation File Url"
+            "title": "Articles Of Incorporation Document Id",
+            "description": "ID of articles of incorporation document"
           }
         },
         "type": "object",
