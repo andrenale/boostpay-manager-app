@@ -152,6 +152,15 @@ export interface EstablishmentCreate {
   articles_of_incorporation_file_url?: string | null; // URI format, max 2083 chars
 }
 
+export interface DocumentSummary {
+  id: number;
+  title: string;
+  original_filename: string;
+  file_type: string;
+  file_size?: number | null;
+  created_at: string;
+}
+
 export interface EstablishmentResponse extends BaseEntity {
   identification_document_number: string;
   type?: EstablishmentType | null; // Establishment type enum
@@ -173,6 +182,13 @@ export interface EstablishmentResponse extends BaseEntity {
   identification_document_file_url?: string | null;
   address_proof_file_url?: string | null;
   articles_of_incorporation_file_url?: string | null;
+  identification_document_id?: number | null;
+  address_proof_document_id?: number | null;
+  articles_of_incorporation_document_id?: number | null;
+  // Nested document objects
+  identification_document?: DocumentSummary | null;
+  address_proof_document?: DocumentSummary | null;
+  articles_of_incorporation_document?: DocumentSummary | null;
 }
 
 export interface EstablishmentUpdate {

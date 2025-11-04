@@ -235,6 +235,51 @@ export function Onboarding() {
           cidade: currentEstablishment.city || "",
           complemento: currentEstablishment.complement || undefined,
         }));
+
+        // Reconstruct document objects from API nested document data
+        const reconstructDocumentObject = (documentSummary: any) => {
+          if (!documentSummary) return null;
+          
+          // Create a mock File object with the original filename
+          const mockFile = new File([""], documentSummary.original_filename, {
+            type: documentSummary.file_type,
+          });
+          
+          return {
+            file: mockFile,
+            documentId: documentSummary.id,
+            url: undefined, // We don't need the URL anymore since we have document IDs
+            uploading: false,
+            error: false,
+          };
+        };
+
+        // Map nested documents back to form document objects based on account type
+        if (detectedAccountType === "juridica") {
+          // For juridica (business):
+          // - articles_of_incorporation_document maps to contratoSocial
+          // - identification_document maps to rgRepresentante  
+          // - address_proof_document maps to comprovanteEndereco
+          if (currentEstablishment.articles_of_incorporation_document) {
+            updateData("contratoSocial", reconstructDocumentObject(currentEstablishment.articles_of_incorporation_document));
+          }
+          if (currentEstablishment.identification_document) {
+            updateData("rgRepresentante", reconstructDocumentObject(currentEstablishment.identification_document));
+          }
+          if (currentEstablishment.address_proof_document) {
+            updateData("comprovanteEndereco", reconstructDocumentObject(currentEstablishment.address_proof_document));
+          }
+        } else if (detectedAccountType === "fisica") {
+          // For fisica (personal):
+          // - identification_document maps to cpfDocumento
+          // - address_proof_document maps to comprovanteEndereco
+          if (currentEstablishment.identification_document) {
+            updateData("cpfDocumento", reconstructDocumentObject(currentEstablishment.identification_document));
+          }
+          if (currentEstablishment.address_proof_document) {
+            updateData("comprovanteEndereco", reconstructDocumentObject(currentEstablishment.address_proof_document));
+          }
+        }
         
         // If we loaded a valid account type from API, mark it as set by user to prevent overwrites
         if (detectedAccountType && !accountTypeSetByUser) {

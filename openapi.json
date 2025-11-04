@@ -1084,7 +1084,7 @@
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -1556,6 +1556,36 @@
         ],
         "title": "DocumentResponse"
       },
+      "DocumentSummary": {
+        "properties": {
+          "id": { "type": "integer", "title": "Id" },
+          "title": { "type": "string", "title": "Title" },
+          "original_filename": {
+            "type": "string",
+            "title": "Original Filename"
+          },
+          "file_type": { "type": "string", "title": "File Type" },
+          "file_size": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "File Size"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "original_filename",
+          "file_type",
+          "created_at"
+        ],
+        "title": "DocumentSummary",
+        "description": "Simplified document schema for use in nested responses"
+      },
       "DocumentUpdate": {
         "properties": {
           "title": {
@@ -2011,6 +2041,27 @@
               { "type": "null" }
             ],
             "title": "Updated At"
+          },
+          "identification_document": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DocumentSummary" },
+              { "type": "null" }
+            ],
+            "description": "Identification document details"
+          },
+          "address_proof_document": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DocumentSummary" },
+              { "type": "null" }
+            ],
+            "description": "Address proof document details"
+          },
+          "articles_of_incorporation_document": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DocumentSummary" },
+              { "type": "null" }
+            ],
+            "description": "Articles of incorporation document details"
           }
         },
         "type": "object",
