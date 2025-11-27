@@ -1,20 +1,73 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { BoostButton } from "@/components/ui/boost-button";
 import { BoostCard, BoostCardHeader, BoostCardContent, BoostCardTitle, BoostCardDescription } from "@/components/ui/boost-card";
 import { BoostInput } from "@/components/ui/boost-input";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/components/ui/use-toast";
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+  const { loginWithRedirect, isAuthenticated, isLoading: authLoading } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Redirect to dashboard if already authenticated
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      console.log('User already authenticated, redirecting to dashboard');
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, authLoading, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Login logic here
-    console.log("Login attempt:", { email, password });
+    setIsLoading(true);
+
+    try {
+      // For development, use hardcoded token
+      // In production, you would call your login API here with email/password
+      // const response = await apiService.post('/auth/login', { email, password });
+      // const { access_token } = response;
+      
+      // For now, use the hardcoded token from the API service
+      const hardcodedToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbmRyZS5uYWxldmFpa29AZ21haWwuY29tIiwiZXN0YWJsaXNobWVudHMiOlt7ImlkIjo5NCwicm9sZSI6ImFkbWluIn1dLCJleHAiOjE3NjU1OTIwOTZ9.ktYksbvYGw9jr3aVMwIY9uGuxhlWf6VikN8aSlcVDHM';
+      
+      const success = await loginWithRedirect(hardcodedToken);
+      
+      if (!success) {
+        toast({
+          title: "Erro no Login",
+          description: "Credenciais inválidas ou erro de autenticação.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      toast({
+        title: "Erro no Login",
+        description: "Ocorreu um erro durante o login. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  // Show loading while auth is initializing
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-boost-accent" />
+          <p className="text-boost-text-secondary">Verificando autenticação...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
@@ -99,8 +152,16 @@ const Login = () => {
               <BoostButton 
                 type="submit" 
                 className="w-full h-12 text-base font-semibold"
+                disabled={isLoading}
               >
-                Entrar
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Entrando...
+                  </>
+                ) : (
+                  "Entrar"
+                )}
               </BoostButton>
             </form>
 

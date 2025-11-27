@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { TrendingUp, TrendingDown, CreditCard, Zap, DollarSign, CheckCircle, Clock, Users, Calendar as CalendarIcon } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { BoostCard, BoostCardHeader, BoostCardContent, BoostCardTitle, BoostCardDescription } from "@/components/ui/boost-card";
 import { BoostBadge } from "@/components/ui/boost-badge";
@@ -14,19 +15,20 @@ import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
 
 const Dashboard = () => {
+  const { user } = useAuth();
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
-  // Mock user data - em uma aplicação real, viria do contexto de autenticação ou localStorage
-  const userData = {
-    name: "Maria Santos", // Altere aqui para testar: "João Silva", "Ana Paula", etc.
-    gender: "feminino" // Altere aqui para testar: "masculino" ou "feminino"
-  };
-
-  // Função para personalizar a saudação baseada no gênero
-  const getWelcomeMessage = (name: string, gender: string) => {
-    const firstName = name.split(" ")[0];
-    const welcomeText = gender === "feminino" ? "Bem-vinda" : "Bem-vindo";
+  // Função para personalizar a saudação baseada no nome do usuário
+  const getWelcomeMessage = (fullName: string | undefined) => {
+    if (!fullName) return "Bem-vindo de volta! 👋";
+    
+    const firstName = fullName.split(" ")[0];
+    // Inferir gênero baseado no nome (simples implementação)
+    // Em um sistema real, isso poderia vir de um campo específico no perfil do usuário
+    const femaleNames = ["maria", "ana", "joana", "carla", "fernanda", "juliana", "patricia", "sandra", "lucia", "helena"];
+    const isLikelyFemale = femaleNames.some(name => firstName.toLowerCase().includes(name));
+    const welcomeText = isLikelyFemale ? "Bem-vinda" : "Bem-vindo";
     return `${welcomeText} de volta, ${firstName}! 👋`;
   };
 
@@ -59,8 +61,8 @@ const Dashboard = () => {
   ];
 
   const recentTransactions = [
-    { id: "TXN001", client: "João Silva", amount: 299.90, status: "success" },
-    { id: "TXN002", client: "Maria Santos", amount: 150.00, status: "success" },
+    { id: "TXN001", client: "Cliente Silva", amount: 299.90, status: "success" },
+    { id: "TXN002", client: "Cliente Santos", amount: 150.00, status: "success" },
     { id: "TXN003", client: "Pedro Costa", amount: 89.50, status: "warning" },
     { id: "TXN004", client: "Ana Paula", amount: 420.00, status: "success" },
     { id: "TXN005", client: "Carlos Lima", amount: 75.25, status: "error" },
@@ -72,7 +74,7 @@ const Dashboard = () => {
       <div className="animate-fade-in flex items-center justify-between">
         <div className="flex-1">
           <h1 className="text-3xl font-bold text-boost-text-primary mb-2">
-            {getWelcomeMessage(userData.name, userData.gender)}
+            {getWelcomeMessage(user?.full_name)}
           </h1>
           <p className="text-boost-text-secondary">
             Você teve 15 novas vendas hoje. Aqui está um resumo da sua atividade.

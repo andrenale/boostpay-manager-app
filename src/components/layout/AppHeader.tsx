@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Bell,
   ChevronDown,
@@ -45,6 +46,7 @@ import { AccountActivationProgress } from "@/components/AccountActivationProgres
 
 export function AppHeader() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [environment, setEnvironment] = useState("test");
   const [documentsCompleted, setDocumentsCompleted] = useState(false);
   const [accountApproved, setAccountApproved] = useState(false);
@@ -368,7 +370,9 @@ export function AppHeader() {
               <div className="w-8 h-8 bg-boost-accent rounded-full flex items-center justify-center">
                 <User className="h-4 w-4 text-boost-text-primary" />
               </div>
-              <span className="font-medium text-boost-text-primary">João Silva</span>
+              <span className="font-medium text-boost-text-primary">
+                {user?.full_name || 'Usuário'}
+              </span>
               <ChevronDown className="h-4 w-4 text-boost-text-secondary" />
             </BoostButton>
           </DropdownMenuTrigger>

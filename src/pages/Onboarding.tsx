@@ -142,6 +142,7 @@ export function Onboarding() {
       toast({
         title: "✅ Dados atualizados com sucesso!",
         description: "As informações do estabelecimento foram salvas.",
+        duration: 5000,
       });
     },
     onError: (error) => {
@@ -149,6 +150,7 @@ export function Onboarding() {
         title: "Erro ao salvar dados",
         description: handleApiError(error),
         variant: "destructive",
+        duration: 5000,
       });
     },
   });
@@ -158,6 +160,7 @@ export function Onboarding() {
       toast({
         title: "✅ Estabelecimento criado com sucesso!",
         description: "Seu estabelecimento foi criado e os dados foram salvos.",
+        duration: 5000,
       });
     },
     onError: (error) => {
@@ -165,6 +168,7 @@ export function Onboarding() {
         title: "Erro ao criar estabelecimento",
         description: handleApiError(error),
         variant: "destructive",
+        duration: 5000,
       });
     },
   });
@@ -548,13 +552,13 @@ export function Onboarding() {
         toast({
           title: "✅ Cadastro Finalizado com Sucesso!",
           description: "Seus dados e documentos foram enviados para análise. Nossa equipe revisará todas as informações e você receberá uma resposta por email em até 3 dias úteis. Agradecemos pela confiança!",
-          duration: 6000,
+          duration: 5000,
         });
       } else {
         toast({
           title: "✅ Cadastro Atualizado com Sucesso!",
           description: "Suas informações foram salvas! Ainda há documentos pendentes que precisam ser enviados. Você encontrará um lembrete na tela inicial para completar o envio.",
-          duration: 8000,
+          duration: 5000,
         });
       }
       
@@ -568,6 +572,7 @@ export function Onboarding() {
         title: "Erro ao salvar dados",
         description: "Houve um problema ao salvar suas informações. Tente novamente.",
         variant: "destructive",
+        duration: 5000,
       });
       console.error('Error completing onboarding:', error);
     } finally {
@@ -604,6 +609,7 @@ export function Onboarding() {
         title: "Erro no arquivo",
         description: validation.error,
         variant: "destructive",
+        duration: 5000,
       });
       return;
     }
@@ -664,6 +670,7 @@ export function Onboarding() {
         title: "Erro no envio",
         description: "Falha ao enviar o arquivo. Tente novamente.",
         variant: "destructive",
+        duration: 5000,
       });
     }
   };

@@ -1,10 +1,11 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
-import { AppProviders } from "./providers/AppProviders";
+import { AuthProvider } from "./contexts/AuthContext";
 import { AppLayout } from "./components/layout/AppLayout";
+import { AuthGuard } from "./components/AuthGuard";
 import { ApiTestsNavigation } from "./test-pages/ApiTestsNavigation";
 import { ProductsApiTest } from "./test-pages/ProductsApiTest";
 import Login from "./pages/Login";
@@ -25,97 +26,120 @@ import CobrancaSucesso from "./pages/CobrancaSucesso";
 import Checkout from "./pages/Checkout";
 import Produtos from "./pages/Produtos";
 
+// Protected Route Component
+const ProtectedRoute: React.FC<{ children: React.ReactNode; requireSuperuser?: boolean }> = ({ 
+  children, 
+  requireSuperuser = false 
+}) => (
+  <AuthGuard requireSuperuser={requireSuperuser}>
+    <AppLayout>
+      {children}
+    </AppLayout>
+  </AuthGuard>
+);
+
 const App = () => (
-  <AppProviders>
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="dark"
-      enableSystem={false}
-      disableTransitionOnChange={false}
-    >
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          
-          {/* Hidden API Testing Routes - For Development Only */}
-          <Route path="/dev/api-tests" element={<ApiTestsNavigation />} />
-          <Route path="/dev/api-tests/products" element={<ProductsApiTest />} />
-          
-          <Route path="/" element={
-            <AppLayout>
-              <Dashboard />
-            </AppLayout>
-          } />
-          <Route path="/transactions" element={
-            <AppLayout>
-              <Transactions />
-            </AppLayout>
-          } />
-          <Route path="/split" element={
-            <AppLayout>
-              <Split />
-            </AppLayout>
-          } />
-          <Route path="/cobranca" element={
-            <AppLayout>
-              <Cobranca />
-            </AppLayout>
-          } />
-          <Route path="/cobranca/sucesso" element={
-            <AppLayout>
-              <CobrancaSucesso />
-            </AppLayout>
-          } />
-          <Route path="/produtos" element={
-            <AppLayout>
-              <Produtos />
-            </AppLayout>
-          } />
-          <Route path="/financial" element={
-            <AppLayout>
-              <Financial />
-            </AppLayout>
-          } />
-          <Route path="/disputes" element={
-            <AppLayout>
-              <Disputes />
-            </AppLayout>
-          } />
-          <Route path="/clients" element={
-            <AppLayout>
-              <Clients />
-            </AppLayout>
-          } />
-          <Route path="/settings" element={
-            <AppLayout>
-              <Settings />
-            </AppLayout>
-          } />
-          <Route path="/help" element={
-            <AppLayout>
-              <Help />
-            </AppLayout>
-          } />
-          <Route path="/onboarding" element={<Onboarding />} />
-          <Route path="/api-documentation" element={
-            <AppLayout>
-              <ApiDocumentation />
-            </AppLayout>
-          } />
-          <Route path="/code-examples" element={
-            <AppLayout>
-              <CodeExamples />
-            </AppLayout>
-          } />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </TooltipProvider>
-    </ThemeProvider>
-  </AppProviders>
+  <BrowserRouter>
+    <AuthProvider>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="dark"
+        enableSystem={false}
+        disableTransitionOnChange={false}
+      >
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/cobranca" element={<Cobranca />} />
+            <Route path="/cobranca/sucesso" element={<CobrancaSucesso />} />
+            
+            {/* Development Routes - Protected */}
+            <Route path="/dev/api-tests" element={
+              <AuthGuard requireSuperuser={true}>
+                <ApiTestsNavigation />
+              </AuthGuard>
+            } />
+            <Route path="/dev/api-tests/products" element={
+              <AuthGuard requireSuperuser={true}>
+                <ProductsApiTest />
+              </AuthGuard>
+            } />
+            
+            {/* Protected Routes */}
+            <Route path="/" element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/transactions" element={
+              <ProtectedRoute>
+                <Transactions />
+              </ProtectedRoute>
+            } />
+            <Route path="/split" element={
+              <ProtectedRoute>
+                <Split />
+              </ProtectedRoute>
+            } />
+            <Route path="/produtos" element={
+              <ProtectedRoute>
+                <Produtos />
+              </ProtectedRoute>
+            } />
+            <Route path="/financial" element={
+              <ProtectedRoute>
+                <Financial />
+              </ProtectedRoute>
+            } />
+            <Route path="/disputes" element={
+              <ProtectedRoute>
+                <Disputes />
+              </ProtectedRoute>
+            } />
+            <Route path="/clients" element={
+              <ProtectedRoute>
+                <Clients />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            } />
+            <Route path="/help" element={
+              <ProtectedRoute>
+                <Help />
+              </ProtectedRoute>
+            } />
+            <Route path="/api-documentation" element={
+              <ProtectedRoute>
+                <ApiDocumentation />
+              </ProtectedRoute>
+            } />
+            <Route path="/code-examples" element={
+              <ProtectedRoute>
+                <CodeExamples />
+              </ProtectedRoute>
+            } />
+            
+            {/* Special Protected Routes */}
+            <Route path="/onboarding" element={
+              <AuthGuard>
+                <Onboarding />
+              </AuthGuard>
+            } />
+            
+            {/* Catch-all route */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </TooltipProvider>
+      </ThemeProvider>
+    </AuthProvider>
+  </BrowserRouter>
 );
 
 export default App;
