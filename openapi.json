@@ -784,6 +784,31 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": ["products"],
+        "summary": "Delete Product",
+        "description": "Soft delete a product. Only users with admin role for the establishment can delete products.",
+        "operationId": "delete_product_products__product_id__delete",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "title": "Product Id" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Successful Response" },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
       }
     },
     "/customers/": {
@@ -1740,6 +1765,14 @@
               { "type": "null" }
             ]
           },
+          "status": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/EstablishmentStatus" },
+              { "type": "null" }
+            ],
+            "description": "Establishment status",
+            "default": "CREATED"
+          },
           "legal_representative_document_number": {
             "anyOf": [
               { "type": "string", "maxLength": 32, "minLength": 1 },
@@ -1892,6 +1925,14 @@
               { "$ref": "#/components/schemas/EstablishmentType" },
               { "type": "null" }
             ]
+          },
+          "status": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/EstablishmentStatus" },
+              { "type": "null" }
+            ],
+            "description": "Establishment status",
+            "default": "CREATED"
           },
           "legal_representative_document_number": {
             "anyOf": [
@@ -2068,6 +2109,11 @@
         "required": ["identification_document_number", "id"],
         "title": "EstablishmentResponse"
       },
+      "EstablishmentStatus": {
+        "type": "string",
+        "enum": ["CREATED", "WAITING_APPROVAL", "PRODUCTION", "DEACTIVATED"],
+        "title": "EstablishmentStatus"
+      },
       "EstablishmentType": {
         "type": "string",
         "enum": ["PERSONAL", "BUSINESS"],
@@ -2087,6 +2133,13 @@
               { "$ref": "#/components/schemas/EstablishmentType" },
               { "type": "null" }
             ]
+          },
+          "status": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/EstablishmentStatus" },
+              { "type": "null" }
+            ],
+            "description": "Establishment status (transition rules apply)"
           },
           "legal_representative_document_number": {
             "anyOf": [
@@ -2561,19 +2614,22 @@
       },
       "UserResponse": {
         "properties": {
-          "email": { "type": "string", "format": "email", "title": "Email" },
-          "full_name": {
-            "type": "string",
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Full Name"
-          },
-          "is_active": {
-            "type": "boolean",
-            "title": "Is Active",
-            "default": true
-          },
           "id": { "type": "integer", "title": "Id" },
+          "email": { "type": "string", "format": "email", "title": "Email" },
+          "given_name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Given Name"
+          },
+          "family_name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Family Name"
+          },
+          "picture_url": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Picture Url"
+          },
+          "is_active": { "type": "boolean", "title": "Is Active" },
+          "is_verified": { "type": "boolean", "title": "Is Verified" },
           "is_superuser": { "type": "boolean", "title": "Is Superuser" },
           "created_at": {
             "type": "string",
@@ -2584,16 +2640,24 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name",
+            "description": "Computed field to return full name",
+            "readOnly": true
           }
         },
         "type": "object",
         "required": [
-          "email",
-          "full_name",
           "id",
+          "email",
+          "is_active",
+          "is_verified",
           "is_superuser",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "full_name"
         ],
         "title": "UserResponse"
       },
