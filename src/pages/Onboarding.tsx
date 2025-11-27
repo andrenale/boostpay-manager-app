@@ -19,6 +19,7 @@ import {
   Calendar
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useOnboardingSteps } from "@/hooks/useOnboardingSteps";
 import { 
   useCurrentEstablishment, 
   useUpdateCurrentEstablishment,
@@ -104,6 +105,7 @@ export function Onboarding() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [accountTypeSetByUser, setAccountTypeSetByUser] = useState(false);
   const [showDateValidation, setShowDateValidation] = useState(false);
+  const [hasAutoDetectedInitialStep, setHasAutoDetectedInitialStep] = useState(false);
   const [data, setData] = useState<OnboardingData>({
     accountType: undefined as any,
     nomeEmpresa: "",
@@ -128,6 +130,9 @@ export function Onboarding() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  // Use the step detection hook
+  const { isStepCompleted, determineCurrentStep, checkAllDocumentsUploaded } = useOnboardingSteps(data);
 
   // API hooks for establishment data
   const {
@@ -293,17 +298,35 @@ export function Onboarding() {
 
       setIsLoading(false);
       
-      // Handle URL step parameter
-      const stepParam = searchParams.get('step');
-      if (stepParam) {
-        const stepNumber = parseInt(stepParam, 10);
-        if (stepNumber >= 1 && stepNumber <= 5) {
-          setCurrentStep(stepNumber);
-        }
-      }
     }, 100);
     return () => clearTimeout(timer);
-  }, [currentEstablishment, establishmentLoading, searchParams]);
+  }, [currentEstablishment, establishmentLoading]);
+
+  // Separate useEffect for step detection that runs after data is loaded
+  useEffect(() => {
+    // Only run step detection after loading is complete
+    if (isLoading) return;
+
+    // Automatically determine which step should be active based on completed data
+    // Only use URL step parameter if specifically provided, otherwise use auto-detection
+    const stepParam = searchParams.get('step');
+    if (stepParam) {
+      const stepNumber = parseInt(stepParam, 10);
+      if (stepNumber >= 1 && stepNumber <= 5) {
+        setCurrentStep(stepNumber);
+      } else {
+        // Invalid step parameter, use auto-detection
+        const appropriateStep = determineCurrentStep();
+        setCurrentStep(appropriateStep);
+      }
+    } else if (!hasAutoDetectedInitialStep) {
+      // No step parameter and haven't auto-detected yet, use auto-detection for initial load
+      const appropriateStep = determineCurrentStep();
+      console.log('Auto-detecting step:', appropriateStep, 'Current data:', data);
+      setCurrentStep(appropriateStep);
+      setHasAutoDetectedInitialStep(true);
+    }
+  }, [isLoading, searchParams, hasAutoDetectedInitialStep, determineCurrentStep, data]);
 
   // Debounced date validation
   useEffect(() => {
@@ -546,7 +569,7 @@ export function Onboarding() {
       await saveDataToAPI();
       
       // Check if all documents are uploaded
-      const allDocumentsUploaded = checkAllDocumentsUploaded();
+      const allDocumentsUploaded = checkAllDocumentsUploaded;
       
       if (allDocumentsUploaded) {
         toast({
@@ -577,22 +600,6 @@ export function Onboarding() {
       console.error('Error completing onboarding:', error);
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  // Função para verificar se todos os documentos obrigatórios foram enviados
-  const checkAllDocumentsUploaded = () => {
-    if (data.accountType === "juridica") {
-      return !!(
-        data.contratoSocial?.documentId && 
-        data.rgRepresentante?.documentId && 
-        data.comprovanteEndereco?.documentId
-      );
-    } else {
-      return !!(
-        data.cpfDocumento?.documentId && 
-        data.comprovanteEndereco?.documentId
-      );
     }
   };
 
@@ -649,7 +656,7 @@ export function Onboarding() {
 
       // Check if all documents are now uploaded
       setTimeout(() => {
-        const allDocsComplete = checkAllDocumentsUploaded();
+        const allDocsComplete = checkAllDocumentsUploaded;
         if (allDocsComplete) {
           localStorage.setItem('allDocumentsCompleted', 'true');
           toast({
@@ -1396,20 +1403,20 @@ export function Onboarding() {
                 </div>
 
                 {/* Status dos documentos */}
-                <div className={`border rounded-lg p-4 ${checkAllDocumentsUploaded() ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'} animate-fade-in`}>
+                <div className={`border rounded-lg p-4 ${checkAllDocumentsUploaded ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'} animate-fade-in`}>
                   <div className="flex items-center space-x-2 mb-2">
-                    {checkAllDocumentsUploaded() ? (
+                    {checkAllDocumentsUploaded ? (
                       <CheckCircle className="h-5 w-5 text-green-600" />
                     ) : (
                       <Upload className="h-5 w-5 text-blue-600" />
                     )}
                     <h4 className="font-medium">
-                      {checkAllDocumentsUploaded() ? 'Documentos Enviados' : 'Documentos Pendentes'}
+                      {checkAllDocumentsUploaded ? 'Documentos Enviados' : 'Documentos Pendentes'}
                     </h4>
                   </div>
                   
-                  <p className={`text-sm ${checkAllDocumentsUploaded() ? 'text-green-700' : 'text-blue-700'}`}>
-                    {checkAllDocumentsUploaded() 
+                  <p className={`text-sm ${checkAllDocumentsUploaded ? 'text-green-700' : 'text-blue-700'}`}>
+                    {checkAllDocumentsUploaded 
                       ? 'Todos os documentos obrigatórios foram enviados com sucesso! Seus dados estão prontos para análise.'
                       : 'Você pode criar sua conta agora e enviar os documentos pendentes posteriormente. Um lembrete será exibido na tela inicial para completar o envio quando desejar.'
                     }
@@ -1738,7 +1745,7 @@ export function Onboarding() {
                   onClick={handleComplete} 
                   disabled={isSubmitting}
                   className={`${
-                    checkAllDocumentsUploaded() 
+                    checkAllDocumentsUploaded 
                       ? 'bg-green-600 hover:bg-green-700' 
                       : 'bg-blue-600 hover:bg-blue-700'
                   } text-white flex items-center space-x-2 disabled:opacity-70 transition-all duration-300`}
@@ -1751,7 +1758,7 @@ export function Onboarding() {
                   ) : (
                     <>
                       <span>
-                        {checkAllDocumentsUploaded() ? 'Finalizar Cadastro' : 'Criar Conta'}
+                        {checkAllDocumentsUploaded ? 'Finalizar Cadastro' : 'Criar Conta'}
                       </span>
                       <CheckCircle className="h-4 w-4" />
                     </>
