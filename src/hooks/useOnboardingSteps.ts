@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { EstablishmentStatus } from '@/types/api';
 
 interface OnboardingData {
   accountType?: "juridica" | "fisica";
@@ -21,7 +22,7 @@ interface OnboardingData {
   comprovanteEndereco?: { documentId?: number };
 }
 
-export const useOnboardingSteps = (data: OnboardingData) => {
+export const useOnboardingSteps = (data: OnboardingData, establishmentStatus?: EstablishmentStatus | null) => {
   // Function to check if all required documents are uploaded
   const checkAllDocumentsUploaded = useMemo(() => {
     if (data.accountType === "juridica") {
@@ -108,6 +109,7 @@ export const useOnboardingSteps = (data: OnboardingData) => {
   return {
     isStepCompleted,
     determineCurrentStep,
-    checkAllDocumentsUploaded
+    checkAllDocumentsUploaded,
+    isWaitingApproval: establishmentStatus === EstablishmentStatus.WAITING_APPROVAL
   };
 };

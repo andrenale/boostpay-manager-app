@@ -25,7 +25,7 @@ import {
   useUpdateCurrentEstablishment,
   useCreateEstablishment 
 } from "@/hooks/useEstablishments";
-import { EstablishmentUpdate, EstablishmentCreate, EstablishmentType } from "@/types/api";
+import { EstablishmentUpdate, EstablishmentCreate, EstablishmentType, EstablishmentStatus } from "@/types/api";
 import { handleApiError } from "@/services/api";
 import { uploadFile, validateFile } from "@/services/documentUpload";
 
@@ -131,9 +131,6 @@ export function Onboarding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // Use the step detection hook
-  const { isStepCompleted, determineCurrentStep, checkAllDocumentsUploaded } = useOnboardingSteps(data);
-
   // API hooks for establishment data
   const {
     data: currentEstablishment,
@@ -141,6 +138,9 @@ export function Onboarding() {
     error: establishmentError,
     refetch: refetchEstablishment,
   } = useCurrentEstablishment();
+
+  // Use the step detection hook
+  const { isStepCompleted, determineCurrentStep, checkAllDocumentsUploaded, isWaitingApproval } = useOnboardingSteps(data, currentEstablishment?.status);
 
   const updateEstablishmentMutation = useUpdateCurrentEstablishment({
     onSuccess: () => {
@@ -565,11 +565,38 @@ export function Onboarding() {
     setIsSubmitting(true);
     
     try {
-      // Save final data to API
-      await saveDataToAPI();
-      
       // Check if all documents are uploaded
       const allDocumentsUploaded = checkAllDocumentsUploaded;
+      
+      let apiData: Partial<EstablishmentUpdate>;
+      
+      if (allDocumentsUploaded) {
+        // Include status for final submission when all documents are uploaded
+        apiData = {
+          ...convertToApiFormat(data),
+          status: EstablishmentStatus.WAITING_APPROVAL
+        };
+      } else {
+        // Save without status if documents are missing
+        apiData = convertToApiFormat(data);
+      }
+
+      // Filter out undefined values
+      const filteredData = Object.fromEntries(
+        Object.entries(apiData).filter(([_, value]) => value !== undefined)
+      ) as EstablishmentUpdate;
+
+      if (currentEstablishment) {
+        // Update existing establishment
+        await updateEstablishmentMutation.mutateAsync(filteredData);
+      } else {
+        // Create new establishment - need at least identification_document_number
+        const createData: EstablishmentCreate = {
+          identification_document_number: filteredData.identification_document_number || '',
+          ...filteredData
+        };
+        await createEstablishmentMutation.mutateAsync(createData);
+      }
       
       if (allDocumentsUploaded) {
         toast({
@@ -1740,6 +1767,16 @@ export function Onboarding() {
                   <span>Continuar</span>
                   <ArrowRight className="h-4 w-4" />
                 </Button>
+              ) : isWaitingApproval ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+                  <div className="flex items-center justify-center space-x-2 text-amber-700">
+                    <CheckCircle className="h-5 w-5" />
+                    <span className="font-medium">Aguardando Aprovação</span>
+                  </div>
+                  <p className="text-sm text-amber-600 mt-2">
+                    Seus dados já foram enviados para análise. Nossa equipe revisará as informações e você receberá uma resposta por email.
+                  </p>
+                </div>
               ) : (
                 <Button 
                   onClick={handleComplete} 

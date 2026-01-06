@@ -128,6 +128,14 @@ export enum EstablishmentType {
   PERSONAL = "PERSONAL"
 }
 
+// Establishment Status Enum
+export enum EstablishmentStatus {
+  CREATED = "CREATED",
+  WAITING_APPROVAL = "WAITING_APPROVAL",
+  PRODUCTION = "PRODUCTION",
+  DEACTIVATED = "DEACTIVATED"
+}
+
 // Establishment Types
 export interface EstablishmentCreate {
   identification_document_number: string; // max 32 chars, min 1 - Required field
@@ -164,6 +172,7 @@ export interface DocumentSummary {
 export interface EstablishmentResponse extends BaseEntity {
   identification_document_number: string;
   type?: EstablishmentType | null; // Establishment type enum
+  status?: EstablishmentStatus | null; // Establishment status enum
   legal_representative_document_number?: string | null;
   legal_representative_birth_date?: string | null; // date format
   legal_representative_phone?: string | null;
@@ -194,6 +203,7 @@ export interface EstablishmentResponse extends BaseEntity {
 export interface EstablishmentUpdate {
   identification_document_number?: string | null;
   type?: EstablishmentType | null; // Establishment type enum
+  status?: EstablishmentStatus | null; // Establishment status enum
   legal_representative_document_number?: string | null;
   legal_representative_birth_date?: string | null;
   legal_representative_phone?: string | null;
