@@ -1437,7 +1437,7 @@ export function Onboarding() {
                     ) : (
                       <Upload className="h-5 w-5 text-blue-600" />
                     )}
-                    <h4 className="font-medium">
+                    <h4 className="font-medium text-green-800">
                       {checkAllDocumentsUploaded ? 'Documentos Enviados' : 'Documentos Pendentes'}
                     </h4>
                   </div>
@@ -1738,6 +1738,21 @@ export function Onboarding() {
 
             {renderStepContent()}
 
+            {/* Aguardando Aprovação Alert - shown above navigation when status is WAITING_APPROVAL */}
+            {currentStep === 5 && isWaitingApproval && (
+              <div className="mt-8 mb-6">
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-6 shadow-sm">
+                  <div className="flex items-center justify-center space-x-3 mb-3">
+                    <CheckCircle className="h-6 w-6 text-amber-600" />
+                    <h3 className="text-xl font-semibold text-amber-800">Aguardando Aprovação</h3>
+                  </div>
+                  <p className="text-center text-amber-700 leading-relaxed">
+                    Seus dados já foram enviados para análise. Nossa equipe revisará todas as informações e você receberá uma resposta por email em até 3 dias úteis.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Navigation */}
             <div className="flex justify-between mt-8">
               {currentStep > 1 ? (
@@ -1768,14 +1783,15 @@ export function Onboarding() {
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               ) : isWaitingApproval ? (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
-                  <div className="flex items-center justify-center space-x-2 text-amber-700">
-                    <CheckCircle className="h-5 w-5" />
-                    <span className="font-medium">Aguardando Aprovação</span>
-                  </div>
-                  <p className="text-sm text-amber-600 mt-2">
-                    Seus dados já foram enviados para análise. Nossa equipe revisará as informações e você receberá uma resposta por email.
-                  </p>
+                <div className="flex-1 flex justify-end">
+                  <Button 
+                    variant="outline"
+                    onClick={() => navigate("/")}
+                    className="flex items-center space-x-2"
+                  >
+                    <span>Voltar para Dashboard</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
                 </div>
               ) : (
                 <Button 
