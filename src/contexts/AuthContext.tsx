@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { authService, AuthState } from '../services/auth';
 import { UserResponse } from '../types/api';
+import { DEV_AUTH_TOKEN, AUTH_TOKEN_KEY, isDevAuth } from '../config/auth';
 
 interface AuthContextType extends AuthState {
   login: (token: string) => Promise<boolean>;
@@ -56,7 +57,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       // 2. Check for existing token in localStorage
-      const savedToken = localStorage.getItem('boostpay_auth_token');
+      const savedToken = localStorage.getItem(AUTH_TOKEN_KEY);
       if (savedToken && savedToken !== 'your-token-here') {
         console.log('💾 Existing token found in localStorage, verifying...');
         apiService.setToken(savedToken);
@@ -99,10 +100,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const tryHardcodedToken = async () => {
-    const hardcodedToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbmRyZS5uYWxldmFpa29AZ21haWwuY29tIiwiZXN0YWJsaXNobWVudHMiOlt7ImlkIjo5NCwicm9sZSI6ImFkbWluIn1dLCJleHAiOjE3NjU1OTIwOTZ9.ktYksbvYGw9jr3aVMwIY9uGuxhlWf6VikN8aSlcVDHM';
+    // Only use dev token if it's available (development mode)
+    if (!DEV_AUTH_TOKEN) {
+      console.log('🔒 Production mode: No dev token available, redirecting to login');
+      setAuthState(prev => ({ ...prev, isLoading: false }));
+      
+      // Only redirect to login if we're not already on login page or public pages
+      const currentPath = window.location.pathname;
+      const publicPaths = ['/login', '/checkout', '/cobranca', '/cobranca/sucesso'];
+      const isPublicPath = publicPaths.some(path => currentPath.startsWith(path));
+      
+      if (!isPublicPath) {
+        redirectToLogin();
+      }
+      return;
+    }
     
-    console.log('🔧 Setting hardcoded token and verifying...');
-    apiService.setToken(hardcodedToken);
+    console.log('🔧 Development mode: Setting hardcoded token and verifying...');
+    apiService.setToken(DEV_AUTH_TOKEN);
     
     // Single verification call
     const authResult = await authService.verifyAuthentication();

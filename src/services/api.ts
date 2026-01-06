@@ -1,8 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-
-// TODO: Replace this hardcoded token with your actual token
-// const HARDCODED_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXZfdXNlcl85NCIsImVzdGFibGlzaG1lbnRzIjpbeyJpZCI6OTQsInJvbGUiOiJhZG1pbiJ9XSwiZXhwIjoxNzY1MjQxNjYxLCJpYXQiOjE3NjAwNTc2NjEsInR5cGUiOiJhY2Nlc3NfdG9rZW4ifQ.WM3Dt0pwJhmrKt_D5-DMLVEQglt2jozF7X_5_4GUpn8';
-// const HARDCODED_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbmRyZS5uYWxldmFpa29AZ21haWwuY29tIiwiZXN0YWJsaXNobWVudHMiOlt7ImlkIjo5NCwicm9sZSI6ImFkbWluIn1dLCJleHAiOjE3NjU1OTIwOTZ9.ktYksbvYGw9jr3aVMwIY9uGuxhlWf6VikN8aSlcVDHM';
+import { AUTH_TOKEN_KEY } from '../config/auth';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -168,7 +165,7 @@ class ApiService {
   private initializeAuth() {
     // Don't automatically set hardcoded token - let AuthContext handle this
     // Only try to load token from localStorage if it exists
-    const savedToken = localStorage.getItem('boostpay_auth_token');
+    const savedToken = localStorage.getItem(AUTH_TOKEN_KEY);
     if (savedToken && savedToken !== 'your-token-here') {
       this.setToken(savedToken);
     }
@@ -177,7 +174,7 @@ class ApiService {
   setToken(token: string) {
     this.token = token;
     if (token !== 'your-token-here') {
-      localStorage.setItem('boostpay_auth_token', token);
+      localStorage.setItem(AUTH_TOKEN_KEY, token);
       
       // Automatically extract and set establishment ID if not already set
       if (getGlobalEstablishmentId() === null) {
@@ -191,7 +188,7 @@ class ApiService {
 
   clearToken() {
     this.token = null;
-    localStorage.removeItem('boostpay_auth_token');
+    localStorage.removeItem(AUTH_TOKEN_KEY);
     clearGlobalEstablishmentId();
   }
 

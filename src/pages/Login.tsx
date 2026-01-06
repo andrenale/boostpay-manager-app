@@ -6,6 +6,7 @@ import { BoostCard, BoostCardHeader, BoostCardContent, BoostCardTitle, BoostCard
 import { BoostInput } from "@/components/ui/boost-input";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/components/ui/use-toast";
+import { DEV_AUTH_TOKEN, isDevAuth } from "@/config/auth";
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -28,20 +29,31 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      // For development, use hardcoded token
-      // In production, you would call your login API here with email/password
-      // const response = await apiService.post('/auth/login', { email, password });
-      // const { access_token } = response;
-      
-      // For now, use the hardcoded token from the API service
-      const hardcodedToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbmRyZS5uYWxldmFpa29AZ21haWwuY29tIiwiZXN0YWJsaXNobWVudHMiOlt7ImlkIjo5NCwicm9sZSI6ImFkbWluIn1dLCJleHAiOjE3NjU1OTIwOTZ9.ktYksbvYGw9jr3aVMwIY9uGuxhlWf6VikN8aSlcVDHM';
-      
-      const success = await loginWithRedirect(hardcodedToken);
-      
-      if (!success) {
+      // Check if we're in development mode with dev token
+      if (isDevAuth() && DEV_AUTH_TOKEN) {
+        // Development mode: use hardcoded token
+        console.log('🔧 Development mode: Using dev token for login');
+        const success = await loginWithRedirect(DEV_AUTH_TOKEN);
+        
+        if (!success) {
+          toast({
+            title: "Erro no Login",
+            description: "Credenciais inválidas ou erro de autenticação.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        // Production mode: call the actual login API
+        console.log('🔒 Production mode: Calling login API');
+        
+        // TODO: Replace this with your actual login API call
+        // const response = await apiService.post('/auth/login', { email, password });
+        // const { access_token } = response.data;
+        // const success = await loginWithRedirect(access_token);
+        
         toast({
-          title: "Erro no Login",
-          description: "Credenciais inválidas ou erro de autenticação.",
+          title: "Login Indisponível",
+          description: "A funcionalidade de login ainda não foi implementada para produção.",
           variant: "destructive",
         });
       }
