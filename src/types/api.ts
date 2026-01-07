@@ -270,6 +270,7 @@ export interface ApiListResponse<T> {
 export interface ListQueryParams {
   skip?: number;
   limit?: number;
+  search?: string;
 }
 
 export interface EstablishmentQueryParams {

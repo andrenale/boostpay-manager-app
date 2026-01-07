@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Plus, Trash2, User, Package } from "lucide-react";
+import { ArrowLeft, Plus, Minus, Trash2, User, Package, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { BoostButton } from "@/components/ui/boost-button";
 import { BoostInput } from "@/components/ui/boost-input";
@@ -12,6 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { formatCurrencyInput, formatCurrency } from "@/lib/currency";
 import { useClients } from "@/contexts/ClientsContext";
+import { useCurrentEstablishmentProducts, useCreateCurrentEstablishmentProduct } from "@/hooks/useProducts";
+import { useEstablishment } from "@/hooks/useEstablishment";
+import { ProductResponse } from "@/types/api";
+import { handleApiError } from "@/services/api";
 
 // Interfaces para os tipos de dados
 interface Cliente {
@@ -28,6 +32,7 @@ interface Cliente {
 interface Product {
   id: string;
   name: string;
+  code?: string;
   description?: string;
   price: number;
   createdAt: Date;
@@ -37,6 +42,85 @@ interface Product {
 const Cobranca = () => {
   const navigate = useNavigate();
   const { clients } = useClients();
+  const { establishmentId, isLoading: establishmentLoading } = useEstablishment();
+  
+  // Estado para busca de produtos
+  const [productSearchTerm, setProductSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  
+  // Debounce search term to avoid excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(productSearchTerm);
+    }, 500); // 500ms delay
+    
+    return () => clearTimeout(timer);
+  }, [productSearchTerm]);
+  
+  // API hook for products with search support
+  const { 
+    data: productsFromAPI = [], 
+    isLoading: productsLoading, 
+    error: productsError,
+    refetch: refetchProducts
+  } = useCurrentEstablishmentProducts(
+    {
+      search: debouncedSearchTerm.trim() || undefined,
+      limit: debouncedSearchTerm.trim() ? undefined : 4, // Limit to 4 only when not searching
+    },
+    {
+      enabled: !!establishmentId,
+    }
+  );
+  
+  // Product creation mutation
+  const createProductMutation = useCreateCurrentEstablishmentProduct({
+    onSuccess: (newProduct) => {
+      // Refetch products to update the list
+      refetchProducts();
+      
+      // Format price for the form
+      const valorFormatado = formatCurrencyInput((parseFloat(newProduct.price) * 100).toString());
+      
+      // Auto-select the created product and fill in the data
+      setFormData(prev => ({
+        ...prev,
+        produtoOpcao: "selecionar",
+        produtosSelecionados: [newProduct.id.toString()],
+        valor: valorFormatado,
+        descricao: newProduct.description || newProduct.name
+      }));
+      
+      // Reset the form
+      setNovoProduto({
+        name: "",
+        description: "",
+        price: "",
+      });
+      
+      toast({
+        title: "Produto criado com sucesso!",
+        description: `${newProduct.name} foi adicionado e selecionado para esta cobrança.`
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao criar produto",
+        description: handleApiError(error),
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Convert API products to the format used in Cobranca
+  const products: Product[] = productsFromAPI.map(p => ({
+    id: p.id.toString(),
+    name: p.name,
+    code: p.code,
+    description: p.description || undefined,
+    price: parseFloat(p.price),
+    createdAt: new Date(p.created_at || Date.now())
+  }));
   
   // Converter clientes do contexto para o formato usado em Cobranca
   const clientes = clients.map(c => ({
@@ -60,43 +144,6 @@ const Cobranca = () => {
     tempo: false,
     destino: false,
   });
-
-  // Mock data dos produtos (mesma estrutura da tela Produtos)
-  const [products, setProducts] = useState<Product[]>([]);
-
-  // Carregar produtos do localStorage ao montar o componente
-  useEffect(() => {
-    const produtosSalvos = localStorage.getItem('boost-produtos');
-    if (produtosSalvos) {
-      const produtosParseados = JSON.parse(produtosSalvos);
-      // Converter as datas de string para Date
-      const produtosComDatas = produtosParseados.map((p: any) => ({
-        ...p,
-        createdAt: new Date(p.createdAt)
-      }));
-      setProducts(produtosComDatas);
-    } else {
-      // Produtos iniciais mock se não houver nada no localStorage
-      const produtosIniciais: Product[] = [
-        {
-          id: "prod_FXZtYydpFLYqNa",
-          name: "cerveja",
-          description: "Cerveja gelada premium",
-          price: 10.00,
-          createdAt: new Date("2025-09-25T22:21:00"),
-        },
-        {
-          id: "prod_Q26E6ckXuJCoWB",
-          name: "coloca",
-          description: "Produto coloca",
-          price: 20.00,
-          createdAt: new Date("2025-09-25T22:21:00"),
-        },
-      ];
-      setProducts(produtosIniciais);
-      localStorage.setItem('boost-produtos', JSON.stringify(produtosIniciais));
-    }
-  }, []);
 
   // Mock data dos recebedores ativos (mesma estrutura do Split)
   const activeRecipients = [
@@ -124,6 +171,7 @@ const Cobranca = () => {
     clienteSelecionado: "",
     produtoOpcao: "selecionar",
     produtosSelecionados: [] as string[],
+    produtoQuantities: {} as Record<string, number>,
     valor: "",
     descricao: "",
     informacoesAdicionais: [],
@@ -208,7 +256,7 @@ const Cobranca = () => {
     }
   };
 
-  const handleCriarNovoProduto = () => {
+  const handleCriarNovoProduto = async () => {
     // Validação simples
     if (!novoProduto.name || !novoProduto.price) {
       toast({
@@ -219,17 +267,21 @@ const Cobranca = () => {
       return;
     }
 
+    if (!establishmentId) {
+      toast({
+        title: "Erro",
+        description: "Estabelecimento não encontrado",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       // Remover formatação: limpar tudo exceto números e vírgula
       const valorLimpo = novoProduto.price.replace(/[^\d,]/g, '');
       
-      console.log('[DEBUG] novoProduto.price original:', novoProduto.price);
-      console.log('[DEBUG] valorLimpo:', valorLimpo);
-      
       // Converter vírgula para ponto e parsear
       const valorNumerico = parseFloat(valorLimpo.replace(',', '.'));
-      
-      console.log('[DEBUG] Criando produto - valorNumerico:', valorNumerico);
       
       if (isNaN(valorNumerico) || valorNumerico <= 0) {
         toast({
@@ -240,53 +292,17 @@ const Cobranca = () => {
         return;
       }
       
-      const produtoCriado: Product = {
-        id: `prod_${Date.now()}`,
+      // Create product via API
+      await createProductMutation.mutateAsync({
+        code: `prod_${Date.now()}`, // Generate a unique code
         name: novoProduto.name,
-        description: novoProduto.description,
-        price: valorNumerico,
-        createdAt: new Date()
-      };
-      
-      // Adicionar produto à lista local
-      setProducts(prev => [produtoCriado, ...prev]);
-      
-      // Salvar no localStorage para aparecer na tela de Produtos
-      const produtosExistentes = JSON.parse(localStorage.getItem('boost-produtos') || '[]');
-      const todosProdutos = [produtoCriado, ...produtosExistentes];
-      localStorage.setItem('boost-produtos', JSON.stringify(todosProdutos));
-      
-      // Formatar valor para o campo de cobrança (mesma formatação que o input usa)
-      const valorFormatado = formatCurrencyInput((valorNumerico * 100).toString());
-      
-      console.log('[DEBUG] Valor formatado para formData:', valorFormatado);
-      
-      // Selecionar automaticamente o produto criado e preencher dados
-      setFormData(prev => ({
-        ...prev,
-        produtoOpcao: "selecionar",
-        produtosSelecionados: [produtoCriado.id],
-        valor: valorFormatado,
-        descricao: novoProduto.description || novoProduto.name
-      }));
-
-      // Limpar formulário
-      setNovoProduto({
-        name: "",
-        description: "",
-        price: ""
+        description: novoProduto.description || undefined,
+        price: valorNumerico.toString(),
       });
-
-      toast({
-        title: "Produto criado com sucesso!",
-        description: `${produtoCriado.name} foi adicionado e selecionado para esta cobrança.`
-      });
+      
     } catch (error) {
-      toast({
-        title: "Erro ao criar produto",
-        description: "Ocorreu um erro inesperado",
-        variant: "destructive"
-      });
+      // Error is handled by the mutation's onError callback
+      console.error('Error creating product:', error);
     }
   };
 
@@ -685,11 +701,16 @@ const Cobranca = () => {
             {/* Formulário para selecionar produtos existentes */}
             {formData.produtoOpcao === "selecionar" && (
               <div className="mt-6 space-y-4">
-                {products.length === 0 ? (
+                {productsLoading && !productSearchTerm ? (
                   <div className="p-8 text-center text-boost-text-secondary border border-boost-border rounded-lg">
+                    <Package className="h-12 w-12 mx-auto mb-3 opacity-50 animate-pulse" />
+                    <p className="font-medium">Carregando produtos...</p>
+                  </div>
+                ) : productsError ? (
+                  <div className="p-8 text-center text-red-600 border border-red-300 rounded-lg bg-red-50">
                     <Package className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p className="font-medium">Nenhum produto cadastrado</p>
-                    <p className="text-xs mt-1">Crie um novo produto ou cadastre na tela de Produtos</p>
+                    <p className="font-medium">Erro ao carregar produtos</p>
+                    <p className="text-xs mt-1">Tente novamente mais tarde</p>
                   </div>
                 ) : (
                   <>
@@ -697,8 +718,44 @@ const Cobranca = () => {
                       <Label className="text-boost-text-secondary text-sm mb-3 block">
                         Selecione um ou mais produtos:
                       </Label>
+                      
+                      {/* Search Input - Always visible */}
+                      <div className="relative mb-3">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-boost-text-secondary" />
+                        <BoostInput
+                          type="text"
+                          placeholder="Buscar por nome ou código (#123)..."
+                          value={productSearchTerm}
+                          onChange={(e) => setProductSearchTerm(e.target.value)}
+                          className="pl-10"
+                          autoFocus={!!debouncedSearchTerm}
+                        />
+                        {productSearchTerm && !productsLoading && (
+                          <button
+                            type="button"
+                            onClick={() => setProductSearchTerm("")}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-boost-text-secondary hover:text-boost-text-primary"
+                          >
+                            ✕
+                          </button>
+                        )}
+                        {productsLoading && productSearchTerm && (
+                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                            <div className="animate-spin h-4 w-4 border-2 border-boost-primary border-t-transparent rounded-full"></div>
+                          </div>
+                        )}
+                      </div>
+                      
                       <div className="space-y-2 max-h-[400px] overflow-y-auto border border-boost-border rounded-lg p-2">
-                        {products.map((produto) => (
+                        {products.length === 0 ? (
+                          <div className="p-4 text-center text-boost-text-secondary">
+                            <p className="text-sm">Nenhum produto encontrado</p>
+                            <p className="text-xs mt-1">
+                              {productSearchTerm.trim() ? "Tente outro termo de busca" : "Crie um novo produto"}
+                            </p>
+                          </div>
+                        ) : (
+                          products.map((produto) => (
                           <div
                             key={produto.id}
                             className="flex items-start space-x-3 p-3 rounded-lg hover:bg-boost-bg-secondary border border-boost-border cursor-pointer"
@@ -708,17 +765,32 @@ const Cobranca = () => {
                                 ? formData.produtosSelecionados.filter(id => id !== produto.id)
                                 : [...formData.produtosSelecionados, produto.id];
                               
-                              // Calcular valor total
+                              // Atualizar quantidades (inicializar com 1 para novos produtos, remover para desmarcados)
+                              const newQuantities = { ...formData.produtoQuantities };
+                              if (!isSelected) {
+                                newQuantities[produto.id] = 1;
+                              } else {
+                                delete newQuantities[produto.id];
+                              }
+                              
+                              // Calcular valor total com quantidades
                               const produtosSelecionados = products.filter(p => newSelection.includes(p.id));
-                              const valorTotal = produtosSelecionados.reduce((sum, p) => sum + (p.price || 0), 0);
+                              const valorTotal = produtosSelecionados.reduce((sum, p) => {
+                                const quantity = newQuantities[p.id] || 1;
+                                return sum + (p.price || 0) * quantity;
+                              }, 0);
                               const valorFormatado = valorTotal.toFixed(2).replace('.', ',');
                               
                               // Criar descrição com todos os produtos
-                              const descricao = produtosSelecionados.map(p => p.name).join(', ');
+                              const descricao = produtosSelecionados.map(p => {
+                                const quantity = newQuantities[p.id] || 1;
+                                return quantity > 1 ? `${p.name} (${quantity}x)` : p.name;
+                              }).join(', ');
                               
                               setFormData(prev => ({
                                 ...prev,
                                 produtosSelecionados: newSelection,
+                                produtoQuantities: newQuantities,
                                 valor: valorFormatado,
                                 descricao: descricao || prev.descricao
                               }));
@@ -747,8 +819,16 @@ const Cobranca = () => {
                               </div>
                             </div>
                           </div>
-                        ))}
+                        ))
+                        )}
                       </div>
+                      
+                      {/* Show hint when not searching */}
+                      {!productSearchTerm.trim() && products.length === 4 && (
+                        <p className="text-xs text-boost-text-secondary mt-2">
+                          Mostrando os primeiros 4 produtos. Use a busca para encontrar mais.
+                        </p>
+                      )}
                     </div>
 
                     {/* Mostrar resumo dos produtos selecionados */}
@@ -762,17 +842,154 @@ const Cobranca = () => {
                             const produto = products.find(p => p.id === produtoId);
                             if (!produto) return null;
                             
+                            const quantity = formData.produtoQuantities[produtoId] || 1;
+                            const subtotal = produto.price * quantity;
+                            
                             return (
-                              <div key={produtoId} className="flex items-center justify-between text-sm py-2 border-b border-boost-border last:border-0">
-                                <div className="flex-1">
+                              <div key={produtoId} className="flex items-center gap-3 py-2 border-b border-boost-border last:border-0">
+                                <div className="flex-1 min-w-0">
                                   <p className="font-medium text-boost-text-primary">{produto.name}</p>
                                   {produto.description && (
-                                    <p className="text-xs text-boost-text-secondary">{produto.description}</p>
+                                    <p className="text-xs text-boost-text-secondary truncate">{produto.description}</p>
                                   )}
                                 </div>
-                                <span className="font-semibold text-boost-text-primary ml-4">
-                                  {formatCurrency(produto.price)}
+                                
+                                {/* Quantity Input with +/- buttons */}
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const currentQty = formData.produtoQuantities[produtoId] || 1;
+                                      if (currentQty <= 1) return; // Don't go below 1
+                                      
+                                      const newQuantity = currentQty - 1;
+                                      const newQuantities = {
+                                        ...formData.produtoQuantities,
+                                        [produtoId]: newQuantity
+                                      };
+                                      
+                                      // Recalcular valor total
+                                      const valorTotal = formData.produtosSelecionados.reduce((sum, id) => {
+                                        const p = products.find(prod => prod.id === id);
+                                        if (!p) return sum;
+                                        const qty = newQuantities[id] || 1;
+                                        return sum + (p.price || 0) * qty;
+                                      }, 0);
+                                      const valorFormatado = valorTotal.toFixed(2).replace('.', ',');
+                                      
+                                      // Atualizar descrição
+                                      const descricao = formData.produtosSelecionados.map(id => {
+                                        const p = products.find(prod => prod.id === id);
+                                        if (!p) return '';
+                                        const qty = newQuantities[id] || 1;
+                                        return qty > 1 ? `${p.name} (${qty}x)` : p.name;
+                                      }).filter(Boolean).join(', ');
+                                      
+                                      setFormData(prev => ({
+                                        ...prev,
+                                        produtoQuantities: newQuantities,
+                                        valor: valorFormatado,
+                                        descricao
+                                      }));
+                                    }}
+                                    className="h-8 w-8 flex items-center justify-center rounded border border-boost-border bg-boost-bg-primary hover:bg-boost-bg-secondary transition-colors text-boost-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={quantity <= 1}
+                                    title="Diminuir quantidade"
+                                  >
+                                    <Minus className="h-4 w-4" />
+                                  </button>
+                                  
+                                  <div className="w-12 h-8 flex items-center justify-center text-sm font-medium text-boost-text-primary bg-white border border-boost-border rounded px-2">
+                                    {quantity}
+                                  </div>
+                                  
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const currentQty = formData.produtoQuantities[produtoId] || 1;
+                                      if (currentQty >= 999) return; // Don't go above 999
+                                      
+                                      const newQuantity = currentQty + 1;
+                                      const newQuantities = {
+                                        ...formData.produtoQuantities,
+                                        [produtoId]: newQuantity
+                                      };
+                                      
+                                      // Recalcular valor total
+                                      const valorTotal = formData.produtosSelecionados.reduce((sum, id) => {
+                                        const p = products.find(prod => prod.id === id);
+                                        if (!p) return sum;
+                                        const qty = newQuantities[id] || 1;
+                                        return sum + (p.price || 0) * qty;
+                                      }, 0);
+                                      const valorFormatado = valorTotal.toFixed(2).replace('.', ',');
+                                      
+                                      // Atualizar descrição
+                                      const descricao = formData.produtosSelecionados.map(id => {
+                                        const p = products.find(prod => prod.id === id);
+                                        if (!p) return '';
+                                        const qty = newQuantities[id] || 1;
+                                        return qty > 1 ? `${p.name} (${qty}x)` : p.name;
+                                      }).filter(Boolean).join(', ');
+                                      
+                                      setFormData(prev => ({
+                                        ...prev,
+                                        produtoQuantities: newQuantities,
+                                        valor: valorFormatado,
+                                        descricao
+                                      }));
+                                    }}
+                                    className="h-8 w-8 flex items-center justify-center rounded border border-boost-border bg-boost-bg-primary hover:bg-boost-bg-secondary transition-colors text-boost-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={quantity >= 999}
+                                    title="Aumentar quantidade"
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </button>
+                                </div>
+                                
+                                {/* Subtotal */}
+                                <span className="font-semibold text-boost-text-primary whitespace-nowrap w-24 text-right">
+                                  {formatCurrency(subtotal)}
                                 </span>
+                                
+                                {/* Remove Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newSelection = formData.produtosSelecionados.filter(id => id !== produtoId);
+                                    const newQuantities = { ...formData.produtoQuantities };
+                                    delete newQuantities[produtoId];
+                                    
+                                    // Recalcular valor total
+                                    const valorTotal = newSelection.reduce((sum, id) => {
+                                      const p = products.find(prod => prod.id === id);
+                                      if (!p) return sum;
+                                      const qty = newQuantities[id] || 1;
+                                      return sum + (p.price || 0) * qty;
+                                    }, 0);
+                                    const valorFormatado = valorTotal.toFixed(2).replace('.', ',');
+                                    
+                                    // Atualizar descrição
+                                    const descricao = newSelection.map(id => {
+                                      const p = products.find(prod => prod.id === id);
+                                      if (!p) return '';
+                                      const qty = newQuantities[id] || 1;
+                                      return qty > 1 ? `${p.name} (${qty}x)` : p.name;
+                                    }).filter(Boolean).join(', ');
+                                    
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      produtosSelecionados: newSelection,
+                                      produtoQuantities: newQuantities,
+                                      valor: valorFormatado,
+                                      descricao: descricao || prev.descricao
+                                    }));
+                                  }}
+                                  className="p-1 hover:bg-boost-bg-primary rounded transition-colors text-boost-text-secondary hover:text-red-500"
+                                  title="Remover produto"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
                               </div>
                             );
                           })}
@@ -780,9 +997,12 @@ const Cobranca = () => {
                             <span className="font-semibold text-boost-text-primary">Valor Total:</span>
                             <span className="text-lg font-bold text-boost-text-primary">
                               {formatCurrency(
-                                products
-                                  .filter(p => formData.produtosSelecionados.includes(p.id))
-                                  .reduce((sum, p) => sum + (p.price || 0), 0)
+                                formData.produtosSelecionados.reduce((sum, id) => {
+                                  const p = products.find(prod => prod.id === id);
+                                  if (!p) return sum;
+                                  const qty = formData.produtoQuantities[id] || 1;
+                                  return sum + (p.price || 0) * qty;
+                                }, 0)
                               )}
                             </span>
                           </div>
@@ -842,9 +1062,19 @@ const Cobranca = () => {
                   <BoostButton
                     onClick={handleCriarNovoProduto}
                     className="min-w-32"
+                    disabled={createProductMutation.isPending}
                   >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Criar Produto
+                    {createProductMutation.isPending ? (
+                      <>
+                        <div className="h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Criando...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Criar Produto
+                      </>
+                    )}
                   </BoostButton>
                 </div>
               </div>

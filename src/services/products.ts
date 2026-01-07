@@ -44,6 +44,9 @@ export class ProductsService {
       if (params.limit !== undefined) {
         queryParams.append('limit', params.limit.toString());
       }
+      if (params.search !== undefined && params.search.trim() !== '') {
+        queryParams.append('search', params.search.trim());
+      }
 
       const response = await apiService.get<ProductResponse[]>(
         `${this.basePath}/?${queryParams.toString()}`

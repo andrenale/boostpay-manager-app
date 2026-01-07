@@ -17,7 +17,7 @@ const USE_DEV_TOKEN = import.meta.env.VITE_USE_DEV_TOKEN === 'true' || import.me
  * 1. Set VITE_USE_DEV_TOKEN=false in your .env.production file
  * 2. Or simply don't set it (defaults to false in production builds)
  */
-const DEV_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbmRyZS5uYWxldmFpa29AZ21haWwuY29tIiwiZXN0YWJsaXNobWVudHMiOlt7ImlkIjo5NCwicm9sZSI6ImFkbWluIn1dLCJleHAiOjE3Njc3NDQyNDN9.ERu3PbPIJXAiJwZXEQdm4wtc8jlR9avAJTKztQppCGY';
+const DEV_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbmRyZS5uYWxldmFpa29AZ21haWwuY29tIiwiZXN0YWJsaXNobWVudHMiOlt7ImlkIjo5NCwicm9sZSI6ImFkbWluIn1dLCJleHAiOjE3NzAzMzY0NTd9.b9ogl2NHAbRw77laPVV3eFUfwrCxkO4gKlbbie1joGY';
 
 /**
  * Export the dev token only if in development mode
