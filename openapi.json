@@ -858,6 +858,7 @@
       "get": {
         "tags": ["customers"],
         "summary": "List Customers",
+        "description": "List customers for an establishment with optional search filter.\n\n- **establishment_id**: Required. The establishment ID to filter customers.\n- **search**: Optional. Intelligent search that adapts based on input:\n  - If starts with '#' (e.g., '#123'), searches by customer ID\n  - If only numbers (e.g., '11987654321'), searches by document number or phone\n  - If contains letters (e.g., 'Maria'), searches by name or email (case-insensitive)\n\nThe user token must have permission for the specified establishment.",
         "operationId": "list_customers_customers__get",
         "parameters": [
           {
@@ -865,6 +866,17 @@
             "in": "query",
             "required": true,
             "schema": { "type": "integer", "title": "Establishment Id" }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "description": "Search customers. Use '#' prefix for ID search, numbers for document/phone, or text for name/email",
+              "title": "Search"
+            },
+            "description": "Search customers. Use '#' prefix for ID search, numbers for document/phone, or text for name/email"
           }
         ],
         "responses": {

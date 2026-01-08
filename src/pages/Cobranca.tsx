@@ -11,10 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { formatCurrencyInput, formatCurrency } from "@/lib/currency";
-import { useClients } from "@/contexts/ClientsContext";
 import { useCurrentEstablishmentProducts, useCreateCurrentEstablishmentProduct } from "@/hooks/useProducts";
+import { useCurrentEstablishmentCustomers, useCreateCurrentEstablishmentCustomer } from "@/hooks/useCustomers";
 import { useEstablishment } from "@/hooks/useEstablishment";
-import { ProductResponse } from "@/types/api";
+import { ProductResponse, CustomerResponse } from "@/types/api";
 import { handleApiError } from "@/services/api";
 
 // Interfaces para os tipos de dados
@@ -41,14 +41,17 @@ interface Product {
 
 const Cobranca = () => {
   const navigate = useNavigate();
-  const { clients } = useClients();
   const { establishmentId, isLoading: establishmentLoading } = useEstablishment();
   
   // Estado para busca de produtos
   const [productSearchTerm, setProductSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   
-  // Debounce search term to avoid excessive API calls
+  // Estado para busca de clientes
+  const [customerSearchTerm, setCustomerSearchTerm] = useState("");
+  const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState("");
+  
+  // Debounce product search term to avoid excessive API calls
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchTerm(productSearchTerm);
@@ -56,6 +59,15 @@ const Cobranca = () => {
     
     return () => clearTimeout(timer);
   }, [productSearchTerm]);
+  
+  // Debounce customer search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedCustomerSearch(customerSearchTerm);
+    }, 500); // 500ms delay
+    
+    return () => clearTimeout(timer);
+  }, [customerSearchTerm]);
   
   // API hook for products with search support
   const { 
@@ -70,6 +82,21 @@ const Cobranca = () => {
     },
     {
       enabled: !!establishmentId,
+    }
+  );
+  
+  // API hook for customers with search support (only search, never list all)
+  const {
+    data: customersFromAPI = [],
+    isLoading: customersLoading,
+    error: customersError,
+    refetch: refetchCustomers
+  } = useCurrentEstablishmentCustomers(
+    {
+      search: debouncedCustomerSearch.trim(),
+    },
+    {
+      enabled: !!establishmentId && debouncedCustomerSearch.trim().length >= 5,
     }
   );
   
@@ -112,6 +139,43 @@ const Cobranca = () => {
     },
   });
   
+  // Customer creation mutation
+  const createCustomerMutation = useCreateCurrentEstablishmentCustomer({
+    onSuccess: (newCustomer) => {
+      // Refetch customers to update the list
+      refetchCustomers();
+      
+      // Auto-select the created customer
+      setFormData(prev => ({
+        ...prev,
+        clienteOpcao: "selecionar",
+        clienteSelecionado: newCustomer.id.toString()
+      }));
+      
+      // Reset the form
+      setNovoCliente({
+        nome: "",
+        email: "",
+        telefone: "",
+        documento: "",
+        tipo: "pf",
+        razaoSocial: ""
+      });
+      
+      toast({
+        title: "Cliente criado com sucesso!",
+        description: `${newCustomer.name} foi adicionado e selecionado para esta cobrança.`
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao criar cliente",
+        description: handleApiError(error),
+        variant: "destructive",
+      });
+    },
+  });
+  
   // Convert API products to the format used in Cobranca
   const products: Product[] = productsFromAPI.map(p => ({
     id: p.id.toString(),
@@ -122,16 +186,16 @@ const Cobranca = () => {
     createdAt: new Date(p.created_at || Date.now())
   }));
   
-  // Converter clientes do contexto para o formato usado em Cobranca
-  const clientes = clients.map(c => ({
-    id: c.id,
+  // Convert API customers to the format used in Cobranca
+  const clientes = customersFromAPI.map(c => ({
+    id: c.id.toString(),
     nome: c.name,
-    email: c.email,
+    email: c.email || "",
     telefone: c.phone,
-    documento: "", // Campo não existe no contexto básico
+    documento: c.document_number,
     tipo: 'pf' as 'pf' | 'pj',
     razaoSocial: undefined,
-    createdAt: new Date()
+    createdAt: new Date(c.created_at || Date.now())
   }));
   
   const [openSections, setOpenSections] = useState({
@@ -200,59 +264,37 @@ const Cobranca = () => {
     razaoSocial: ""
   });
 
-  const handleCriarNovoCliente = () => {
+  const handleCriarNovoCliente = async () => {
     // Validação simples
-    if (!novoCliente.nome || !novoCliente.email) {
+    if (!novoCliente.nome || !novoCliente.telefone || !novoCliente.documento) {
       toast({
         title: "Erro na validação",
-        description: "Preencha nome e email do cliente",
+        description: "Preencha nome, telefone e documento do cliente",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!establishmentId) {
+      toast({
+        title: "Erro",
+        description: "Estabelecimento não encontrado",
         variant: "destructive"
       });
       return;
     }
 
     try {
-      // Salvar diretamente no localStorage no formato do Cobranca
-      const clientesExistentes = JSON.parse(localStorage.getItem('boost-clientes') || '[]');
-      const clienteCriado = {
-        ...novoCliente,
-        id: `CLI${Date.now()}`,
-        createdAt: new Date()
-      };
-      
-      const todosClientes = [...clientesExistentes, clienteCriado];
-      localStorage.setItem('boost-clientes', JSON.stringify(todosClientes));
-      
-      // Selecionar automaticamente o cliente criado
-      setFormData(prev => ({
-        ...prev,
-        clienteOpcao: "selecionar",
-        clienteSelecionado: clienteCriado.id
-      }));
-
-      // Limpar formulário
-      setNovoCliente({
-        nome: "",
-        email: "",
-        telefone: "",
-        documento: "",
-        tipo: "pf",
-        razaoSocial: ""
+      // Create customer via API
+      await createCustomerMutation.mutateAsync({
+        name: novoCliente.nome,
+        phone: novoCliente.telefone,
+        email: novoCliente.email || undefined,
+        document_number: novoCliente.documento,
       });
-
-      toast({
-        title: "Cliente criado com sucesso!",
-        description: `${clienteCriado.nome} foi adicionado e selecionado para esta cobrança.`
-      });
-      
-      // Forçar reload para aparecer no contexto
-      window.location.reload();
     } catch (error) {
-      toast({
-        title: "Erro ao criar cliente",
-        description: "Ocorreu um erro inesperado",
-        variant: "destructive"
-      });
+      // Error is handled by the mutation's onError callback
+      console.error('Error creating customer:', error);
     }
   };
 
@@ -804,9 +846,14 @@ const Cobranca = () => {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-boost-text-primary truncate">
-                                    {produto.name}
-                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium text-boost-text-primary truncate">
+                                      {produto.name}
+                                    </p>
+                                    <span className="text-xs text-gray-400 whitespace-nowrap">
+                                      #{produto.id}
+                                    </span>
+                                  </div>
                                   {produto.description && (
                                     <p className="text-xs text-boost-text-secondary mt-0.5 line-clamp-2">
                                       {produto.description}
@@ -1135,37 +1182,97 @@ const Cobranca = () => {
             {/* Formulário para selecionar cliente existente */}
             {formData.clienteOpcao === "selecionar" && (
               <div className="mt-6 space-y-4">
-                <div>
-                  <Label className="text-boost-text-secondary text-sm">Selecione um cliente: <span className="text-red-500">*</span></Label>
-                  <Select 
-                    value={formData.clienteSelecionado} 
-                    onValueChange={(value) => setFormData(prev => ({...prev, clienteSelecionado: value}))}
-                  >
-                    <SelectTrigger className="mt-2">
-                      <SelectValue placeholder="Escolha um cliente cadastrado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clientes.length === 0 ? (
-                        <div className="p-4 text-center text-boost-text-secondary">
-                          <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          <p>Nenhum cliente cadastrado</p>
-                          <p className="text-xs">Crie um novo cliente ou solicite o cadastro</p>
+                {customersLoading && !customerSearchTerm ? (
+                  <div className="p-8 text-center text-boost-text-secondary border border-boost-border rounded-lg">
+                    <User className="h-12 w-12 mx-auto mb-3 opacity-50 animate-pulse" />
+                    <p className="font-medium">Carregando clientes...</p>
+                  </div>
+                ) : customersError ? (
+                  <div className="p-8 text-center text-red-600 border border-red-300 rounded-lg bg-red-50">
+                    <User className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p className="font-medium">Erro ao carregar clientes</p>
+                    <p className="text-xs mt-1">Tente novamente mais tarde</p>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <Label className="text-boost-text-secondary text-sm mb-3 block">
+                        Selecione um cliente: <span className="text-red-500">*</span>
+                      </Label>
+                      
+                      {/* Search Input */}
+                      <div className="relative mb-3">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-boost-text-secondary" />
+                        <BoostInput
+                          type="text"
+                          placeholder="Buscar por nome, email, telefone ou documento..."
+                          value={customerSearchTerm}
+                          onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                          className="pl-10"
+                          autoFocus={!!debouncedCustomerSearch}
+                        />
+                        {customerSearchTerm && !customersLoading && (
+                          <button
+                            type="button"
+                            onClick={() => setCustomerSearchTerm("")}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-boost-text-secondary hover:text-boost-text-primary"
+                          >
+                            ✕
+                          </button>
+                        )}
+                        {customersLoading && customerSearchTerm && (
+                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                            <div className="animate-spin h-4 w-4 border-2 border-boost-primary border-t-transparent rounded-full"></div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Customer List or Prompt */}
+                      {customerSearchTerm.trim().length < 5 ? (
+                        <div className="p-8 text-center text-boost-text-secondary border border-boost-border rounded-lg">
+                          <Search className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                          <p className="font-medium">Digite para buscar clientes</p>
+                          <p className="text-xs mt-1">
+                            {customerSearchTerm.trim().length > 0 
+                              ? `Digite mais ${5 - customerSearchTerm.trim().length} caractere(s) para buscar`
+                              : "Digite pelo menos 5 caracteres para buscar"}
+                          </p>
+                        </div>
+                      ) : clientes.length === 0 ? (
+                        <div className="p-8 text-center text-boost-text-secondary border border-boost-border rounded-lg">
+                          <User className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                          <p className="font-medium">Nenhum cliente encontrado</p>
+                          <p className="text-xs mt-1">Tente outro termo de busca</p>
                         </div>
                       ) : (
-                        clientes.map((cliente) => (
-                          <SelectItem key={cliente.id} value={cliente.id}>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{cliente.nome}</span>
-                              <span className="text-xs text-boost-text-secondary">
-                                {cliente.documento} • {cliente.email}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))
+                        <div className="border border-boost-border rounded-lg max-h-64 overflow-y-auto">
+                          {clientes.map((cliente) => (
+                            <button
+                              key={cliente.id}
+                              type="button"
+                              onClick={() => setFormData(prev => ({...prev, clienteSelecionado: cliente.id}))}
+                              className={`w-full p-4 text-left hover:bg-boost-bg-tertiary transition-colors border-b border-boost-border last:border-b-0 ${
+                                formData.clienteSelecionado === cliente.id ? 'bg-boost-bg-tertiary' : 'bg-boost-bg-secondary'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <div className="font-medium text-boost-text-primary">{cliente.nome}</div>
+                                  <div className="text-xs text-boost-text-secondary mt-1">
+                                    {cliente.documento} • {cliente.email}
+                                  </div>
+                                </div>
+                                {formData.clienteSelecionado === cliente.id && (
+                                  <div className="ml-3 text-boost-primary">✓</div>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
                       )}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Mostrar dados do cliente selecionado */}
                 {formData.clienteSelecionado && (
