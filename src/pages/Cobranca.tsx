@@ -89,6 +89,7 @@ const Cobranca = () => {
   const {
     data: customersFromAPI = [],
     isLoading: customersLoading,
+    isFetching: customersFetching,
     error: customersError,
     refetch: refetchCustomers
   } = useCurrentEstablishmentCustomers(
@@ -647,7 +648,7 @@ const Cobranca = () => {
           <ArrowLeft className="h-5 w-5" />
         </BoostButton>
         <div>
-          <h1 className="text-2xl font-bold text-boost-text-primary">Nova Cobrança</h1>
+          <h1 className="mt-4 text-2xl font-bold text-boost-text-primary">Nova Cobrança</h1>
           <p className="text-boost-text-secondary">
             Configure sua cobrança personalizada para gerar um link de pagamento
           </p>
@@ -1227,48 +1228,57 @@ const Cobranca = () => {
                         )}
                       </div>
                       
-                      {/* Customer List or Prompt */}
-                      {customerSearchTerm.trim().length < 5 ? (
-                        <div className="p-8 text-center text-boost-text-secondary border border-boost-border rounded-lg">
-                          <Search className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                          <p className="font-medium">Digite para buscar clientes</p>
-                          <p className="text-xs mt-1">
-                            {customerSearchTerm.trim().length > 0 
-                              ? `Digite mais ${5 - customerSearchTerm.trim().length} caractere(s) para buscar`
-                              : "Digite pelo menos 5 caracteres para buscar"}
-                          </p>
-                        </div>
-                      ) : clientes.length === 0 ? (
-                        <div className="p-8 text-center text-boost-text-secondary border border-boost-border rounded-lg">
-                          <User className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                          <p className="font-medium">Nenhum cliente encontrado</p>
-                          <p className="text-xs mt-1">Tente outro termo de busca</p>
-                        </div>
-                      ) : (
-                        <div className="border border-boost-border rounded-lg max-h-64 overflow-y-auto">
-                          {clientes.map((cliente) => (
-                            <button
-                              key={cliente.id}
-                              type="button"
-                              onClick={() => setFormData(prev => ({...prev, clienteSelecionado: cliente.id}))}
-                              className={`w-full p-4 text-left hover:bg-boost-bg-tertiary transition-colors border-b border-boost-border last:border-b-0 ${
-                                formData.clienteSelecionado === cliente.id ? 'bg-boost-bg-tertiary' : 'bg-boost-bg-secondary'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <div className="font-medium text-boost-text-primary">{cliente.nome}</div>
-                                  <div className="text-xs text-boost-text-secondary mt-1">
-                                    {cliente.documento} • {cliente.email}
+                      {/* Customer List or Prompt - Only show if no customer is selected */}
+                      {!formData.clienteSelecionado && (
+                        <>
+                          {customerSearchTerm.trim().length < 5 ? (
+                            <div className="p-8 text-center text-boost-text-secondary border border-boost-border rounded-lg">
+                              <Search className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                              <p className="font-medium">Digite para buscar clientes</p>
+                              <p className="text-xs mt-1">
+                                {customerSearchTerm.trim().length > 0 
+                                  ? `Digite mais ${5 - customerSearchTerm.trim().length} caractere(s) para buscar`
+                                  : "Digite pelo menos 5 caracteres para buscar"}
+                              </p>
+                            </div>
+                          ) : customerSearchTerm.trim().length >= 5 && debouncedCustomerSearch.trim().length < 5 ? (
+                            <div className="p-8 text-center text-boost-text-secondary border border-boost-border rounded-lg">
+                              <div className="animate-spin h-12 w-12 mx-auto mb-3 border-4 border-boost-primary border-t-transparent rounded-full"></div>
+                              <p className="font-medium">Preparando busca...</p>
+                            </div>
+                          ) : debouncedCustomerSearch.trim().length >= 5 && (customersLoading || customersFetching) ? (
+                            <div className="p-8 text-center text-boost-text-secondary border border-boost-border rounded-lg">
+                              <div className="animate-spin h-12 w-12 mx-auto mb-3 border-4 border-boost-primary border-t-transparent rounded-full"></div>
+                              <p className="font-medium">Buscando clientes...</p>
+                            </div>
+                          ) : debouncedCustomerSearch.trim().length >= 5 && clientes.length === 0 ? (
+                            <div className="p-8 text-center text-boost-text-secondary border border-boost-border rounded-lg">
+                              <User className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                              <p className="font-medium">Nenhum cliente encontrado</p>
+                              <p className="text-xs mt-1">Tente outro termo de busca</p>
+                            </div>
+                          ) : clientes.length > 0 ? (
+                            <div className="border border-boost-border rounded-lg max-h-64 overflow-y-auto">
+                              {clientes.map((cliente) => (
+                                <button
+                                  key={cliente.id}
+                                  type="button"
+                                  onClick={() => setFormData(prev => ({...prev, clienteSelecionado: cliente.id}))}
+                                  className="w-full p-4 text-left hover:bg-boost-bg-tertiary transition-colors border-b border-boost-border last:border-b-0 bg-boost-bg-secondary"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex-1">
+                                      <div className="font-medium text-boost-text-primary">{cliente.nome}</div>
+                                      <div className="text-xs text-boost-text-secondary mt-1">
+                                        {cliente.documento} • {cliente.email}
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
-                                {formData.clienteSelecionado === cliente.id && (
-                                  <div className="ml-3 text-boost-primary">✓</div>
-                                )}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </>
                       )}
                     </div>
                   </>
@@ -1283,7 +1293,21 @@ const Cobranca = () => {
                       
                       return (
                         <div>
-                          <h4 className="font-medium text-boost-text-primary mb-3">Dados do Cliente:</h4>
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-medium text-boost-text-primary">Dados do Cliente:</h4>
+                            <BoostButton
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setFormData(prev => ({...prev, clienteSelecionado: ""}));
+                                setCustomerSearchTerm("");
+                              }}
+                              className="text-boost-text-secondary hover:text-boost-text-primary"
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Limpar seleção
+                            </BoostButton>
+                          </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                             <div>
                               <span className="text-boost-text-secondary">Nome:</span>
