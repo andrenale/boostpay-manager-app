@@ -146,12 +146,26 @@ const Cobranca = () => {
       // Refetch customers to update the list
       refetchCustomers();
       
+      // Create customer object in the expected format
+      const customerData: Cliente = {
+        id: newCustomer.id.toString(),
+        nome: newCustomer.name,
+        email: newCustomer.email || "",
+        telefone: newCustomer.phone,
+        documento: newCustomer.document_number,
+        tipo: 'pf',
+        createdAt: new Date(newCustomer.created_at || Date.now())
+      };
+      
       // Auto-select the created customer
       setFormData(prev => ({
         ...prev,
         clienteOpcao: "selecionar",
         clienteSelecionado: newCustomer.id.toString()
       }));
+      
+      // Store the customer data
+      setSelectedCustomerData(customerData);
       
       // Reset the form
       setNovoCliente({
@@ -247,6 +261,9 @@ const Cobranca = () => {
       cnpj: "28.620.382/0001-75",
     },
   });
+
+  // Estado para armazenar o cliente selecionado (persiste mesmo quando a busca é limpa)
+  const [selectedCustomerData, setSelectedCustomerData] = useState<Cliente | null>(null);
 
   // Estado para o formulário de criação de produto
   const [novoProduto, setNovoProduto] = useState({
@@ -350,9 +367,8 @@ const Cobranca = () => {
   };
 
   const getClienteSubtitle = () => {
-    if (formData.clienteOpcao === "selecionar" && formData.clienteSelecionado) {
-      const cliente = clientes.find(c => c.id === formData.clienteSelecionado);
-      return cliente ? `${cliente.nome} - ${cliente.documento}` : "Nenhum Cliente Selecionado";
+    if (formData.clienteOpcao === "selecionar" && formData.clienteSelecionado && selectedCustomerData) {
+      return `${selectedCustomerData.nome} - ${selectedCustomerData.documento}`;
     } else if (formData.clienteOpcao === "criar") {
       return novoCliente.nome ? `Criando: ${novoCliente.nome}` : "Criar novo cliente";
     }
@@ -1143,6 +1159,7 @@ const Cobranca = () => {
               value={formData.clienteOpcao}
               onValueChange={(value) => {
                 setFormData(prev => ({...prev, clienteOpcao: value, clienteSelecionado: ""}));
+                setSelectedCustomerData(null);
                 // Limpar formulário de novo cliente ao trocar opção
                 if (value !== "criar") {
                   setNovoCliente({
@@ -1263,7 +1280,10 @@ const Cobranca = () => {
                                 <button
                                   key={cliente.id}
                                   type="button"
-                                  onClick={() => setFormData(prev => ({...prev, clienteSelecionado: cliente.id}))}
+                                  onClick={() => {
+                                    setFormData(prev => ({...prev, clienteSelecionado: cliente.id}));
+                                    setSelectedCustomerData(cliente);
+                                  }}
                                   className="w-full p-4 text-left hover:bg-boost-bg-tertiary transition-colors border-b border-boost-border last:border-b-0 bg-boost-bg-secondary"
                                 >
                                   <div className="flex items-center justify-between">
@@ -1285,52 +1305,45 @@ const Cobranca = () => {
                 )}
 
                 {/* Mostrar dados do cliente selecionado */}
-                {formData.clienteSelecionado && (
+                {formData.clienteSelecionado && selectedCustomerData && (
                   <div className="bg-boost-bg-secondary rounded-lg p-4 mt-4">
-                    {(() => {
-                      const cliente = clientes.find(c => c.id === formData.clienteSelecionado);
-                      if (!cliente) return null;
-                      
-                      return (
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium text-boost-text-primary">Dados do Cliente:</h4>
+                        <BoostButton
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setFormData(prev => ({...prev, clienteSelecionado: ""}));
+                            setSelectedCustomerData(null);
+                          }}
+                          className="text-boost-text-secondary hover:text-boost-text-primary"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Limpar seleção
+                        </BoostButton>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                         <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="font-medium text-boost-text-primary">Dados do Cliente:</h4>
-                            <BoostButton
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setFormData(prev => ({...prev, clienteSelecionado: ""}));
-                                setCustomerSearchTerm("");
-                              }}
-                              className="text-boost-text-secondary hover:text-boost-text-primary"
-                            >
-                              <Trash2 className="h-4 w-4 mr-1" />
-                              Limpar seleção
-                            </BoostButton>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                            <div>
-                              <span className="text-boost-text-secondary">Nome:</span>
-                              <p className="text-boost-text-primary font-medium">{cliente.nome}</p>
-                            </div>
-                            <div>
-                              <span className="text-boost-text-secondary">Email:</span>
-                              <p className="text-boost-text-primary font-medium">{cliente.email}</p>
-                            </div>
-                            <div>
-                              <span className="text-boost-text-secondary">Telefone:</span>
-                              <p className="text-boost-text-primary font-medium">{cliente.telefone}</p>
-                            </div>
-                            {cliente.razaoSocial && (
-                              <div className="md:col-span-2">
-                                <span className="text-boost-text-secondary">Razão Social:</span>
-                                <p className="text-boost-text-primary font-medium">{cliente.razaoSocial}</p>
-                              </div>
-                            )}
-                          </div>
+                          <span className="text-boost-text-secondary">Nome:</span>
+                          <p className="text-boost-text-primary font-medium">{selectedCustomerData.nome}</p>
                         </div>
-                      );
-                    })()}
+                        <div>
+                          <span className="text-boost-text-secondary">Email:</span>
+                          <p className="text-boost-text-primary font-medium">{selectedCustomerData.email}</p>
+                        </div>
+                        <div>
+                          <span className="text-boost-text-secondary">Telefone:</span>
+                          <p className="text-boost-text-primary font-medium">{selectedCustomerData.telefone}</p>
+                        </div>
+                        {selectedCustomerData.razaoSocial && (
+                          <div className="md:col-span-2">
+                            <span className="text-boost-text-secondary">Razão Social:</span>
+                            <p className="text-boost-text-primary font-medium">{selectedCustomerData.razaoSocial}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
